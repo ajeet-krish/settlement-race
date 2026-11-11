@@ -12,7 +12,9 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@solana/web3.js": "^1.99.0",
+    "@anchor-lang/core": "1.2.2",
+    "@solana/spl-token": "0.4.15",
+    "@solana/web3.js": "1.99.0",
     "js-sha256": "^1.0.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"

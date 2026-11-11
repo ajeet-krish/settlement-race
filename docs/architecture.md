@@ -1,6 +1,6 @@
 # Settlement Race Architecture
 
-Last updated: 2026-11-10 (Phase 1)
+Last updated: 2026-11-11 (Phase 3)
 
 ## Overview
 Tokenized USD/CAD exchange on Solana devnet racing a sequential pay-first settlement path (controllable gap, counterparty default risk) against an atomic delivery-versus-payment path (both legs or neither), from one identical trade ticket, with integer-cent money, a deterministic virtual clock, and hash-chained provenance anchored on-chain.
@@ -20,6 +20,7 @@ Phase 1 scaffolds the Anchor workspace, freezes the trade ticket and provenance 
 | PDA module | Seed derivations shared by UI and tests | app/src/lib/pda.ts |
 | Program client | Interface plus Anchor devnet impl and offline mock impl | app/src/lib/programClient.ts, anchorClient.ts, mockClient.ts |
 | Evidence module | Attach devnet tx signatures, fetch and verify evidence | app/src/lib/evidence.ts |
+| Anchor flow | Anchor the finished chain head in one tx, verify a local chain against it | app/src/engine/anchorFlow.ts |
 | Virtual clock | Deterministic monotonic race time | app/src/engine/clock.ts |
 | Scenario engine | Orchestrates both lanes from one ticket, asserts identical start | app/src/engine/scenarioEngine.ts |
 | Counterparty bot | Scripted Party B behavior per scenario in one browser | app/src/engine/bot.ts |
@@ -34,8 +35,9 @@ Phase 1 scaffolds the Anchor workspace, freezes the trade ticket and provenance 
 ```text
 TicketInput -> buildTicket -> ticket_hash (sha256 of canonical JSON)
   -> initialize_scenario x2 (SEQUENTIAL lane, ATOMIC lane, identical legs and gap)
-  -> fund_leg x4 (A funds USD escrow, B funds CAD escrow, both lanes)
-  -> snapshot start balances (fairness assert) -> acknowledge x4 -> start_race(path)
+  -> acknowledge x4 (both parties ack each lane; status reaches Ack before funding)
+  -> snapshot start balances (fairness assert) -> fund_leg x4 (A funds USD escrow, B funds CAD escrow, both lanes)
+  -> start_race(path) per lane (SEQUENTIAL and ATOMIC)
 SEQUENTIAL: advance_clock -> release_leg1 (USD escrow -> B) -> virtual risk window
   -> release_leg2 (CAD escrow -> A, B signs) or release_leg2_partial
   -> [gap expired with unpaid remainder] declare_default (CAD remainder -> B) -> DEFAULTED
@@ -53,6 +55,8 @@ Scenario variations (one line each):
 
 ## Virtual Clock and Devnet Evidence
 `VirtualClock` owns canonical race time (integer virtual milliseconds). The engine advances it deterministically; the program mirrors it via `advance_clock` (monotonic `virtual_now_ms` in Scenario) and all gap checks compare virtual time. Real devnet block time and transaction signatures are evidence only: each instruction result stores `tx_sig` and `real_ts_iso` in its provenance record, and the evidence panel fetches each tx from devnet RPC and checks program id plus success. This keeps race timelines reproducible and offline-capable while every claim still points at a real devnet transaction.
+
+Phase 2 implementation notes: `settle_atomic` checks the live vault token balances rather than the recorded `funded_*_cents` counters, so a direct vault donation could enable settlement above the recorded funding. That is harmless for this demo (both parties are made whole) and the engine should treat the vault amount as the source of truth for evidence. The sequential payouts (`release_leg2` and `release_leg2_partial`) are capped at `funded_cad_cents - paid_cad_cents`, so a donation can never push `paid_cad_cents` above the recorded funding or overflow `declare_default`'s reclamation. Also, the `reason` string passed to `mark_failed` has no explicit length cap; it is bounded only by the transaction packet size, which is acceptable for a demo.
 
 ## File Structure
 | File | Purpose | Changes |
@@ -73,10 +77,13 @@ Scenario variations (one line each):
 | app/src/lib/provenance.ts | ProvenanceChain append, verify, head | new (phase 1 types, phase 3 impl) |
 | app/src/lib/pda.ts | PDA seed derivations | new (phase 1) |
 | app/src/lib/programClient.ts | ProgramClient interface | new (phase 1) |
-| app/src/lib/anchorClient.ts | Devnet ProgramClient implementation | new (phase 2 to 4) |
-| app/src/lib/mockClient.ts | Offline fixture implementation | new (phase 6) |
+| app/src/lib/settlement_race.json | Committed copy of the generated IDL (target/ is gitignored) | new (phase 3) |
+| app/src/lib/settlementRaceTypes.ts | Committed copy of the generated IDL type helper | new (phase 3) |
+| app/src/lib/anchorClient.ts | Devnet ProgramClient implementation | new (phase 3 devnet client, phase 4 wiring) |
+| app/src/lib/mockClient.ts | Offline fixture implementation | new (phase 3 interface impl, phase 6 fixtures) |
 | app/src/lib/evidence.ts | Tx signature attach, fetch, verify | new (phase 3) |
 | app/src/engine/clock.ts | VirtualClock | new (phase 1) |
+| app/src/engine/anchorFlow.ts | Anchor chain head glue: anchor and verify | new (phase 3) |
 | app/src/engine/scenarioEngine.ts | Race orchestrator | new (phase 4) |
 | app/src/engine/bot.ts | Scripted counterparty behaviors | new (phase 4) |
 | app/src/engine/scenarios.ts | Five scenario specs | new (phase 1 data, phase 4 logic) |
@@ -98,7 +105,7 @@ ChainHead = PDA(["chain_head", scenario_pubkey])
 Schemas (frozen for phase 2; money fields are decimal strings of integer cents so no JSON float ever exists):
 ```ts
 type LifecycleState = "NEW" | "ACK" | "PAYING" | "SETTLED" | "FAILED" | "DEFAULTED";
-// NEW -> ACK (both parties acknowledge) -> PAYING (both legs funded, start_race)
+// NEW -> ACK (both parties acknowledge) -> PAYING (start_race: USD funded exactly, CAD nonzero)
 // PAYING -> SETTLED (legs complete or atomic) | DEFAULTED (gap expired, unpaid remainder)
 // PAYING -> FAILED (atomic revert or validation failure). Terminal states never reopen.
 type TradeTicket = { schema_version: 1; ticket_id: string; cl_ord_id: string; trade_date: string; value_date: string;
@@ -128,16 +135,21 @@ pub enum Leg { Leg1Usd = 0, Leg2Cad = 1 }
 // initialize_scenario(id, ticket_hash, leg1_cents, leg2_cents, gap_ms)  driver; NEW
 // acknowledge()                     party_a or party_b; sets ack flag
 // fund_leg(leg, amount_cents)       A for Leg1Usd, B for Leg2Cad; CPI party ATA -> vault; checked add
-// start_race(path)                  any party or driver; requires ACK and both legs fully funded; PAYING
-// advance_clock(to_virtual_ms)      monotonic; writes virtual_now_ms
-// release_leg1()                    sequential, PAYING; CPI USD vault -> B ATA
-// release_leg2() / release_leg2_partial(amount_cents)   party_b signer; CPI CAD vault -> A ATA; full -> SETTLED
-// declare_default()                 sequential; virtual_now > leg1_released_at + gap; CAD remainder -> B; DEFAULTED
-// settle_atomic()                   atomic, PAYING; both CPIs in one instruction; vault short -> reverts whole tx
-// mark_failed(reason_code)          PAYING -> FAILED (used after a reverted atomic attempt)
-// anchor_chain_head(final_hash, event_count)   terminal states only; writes ChainHead
+// start_race(path)                  driver only; requires ACK, funded_usd == leg1 exactly, funded_cad > 0; PAYING
+//                                   (full CAD is not required at start; settle_atomic only settles when both vaults cover both legs)
+// advance_clock(to_virtual_ms)      driver only; monotonic, terminal blocked, rejects to_virtual_ms > i64::MAX - MAX_GAP_MS (BadState); writes virtual_now_ms
+// release_leg1()                    driver only; sequential, PAYING; CPI USD vault -> B ATA
+// release_leg2() / release_leg2_partial(amount_cents)   party_b signer; CPI CAD vault -> A ATA; payouts capped at funded_cad - paid_cad; full -> SETTLED
+// declare_default()                 driver only; sequential; virtual_now > leg1_released_at + gap; CAD remainder -> B; DEFAULTED
+// settle_atomic()                   driver only; atomic, PAYING; both CPIs in one instruction; vault short -> reverts whole tx
+// mark_failed(reason)               driver only; PAYING -> FAILED (used after a reverted atomic attempt; reason is logged, not stored)
+// anchor_chain_head(final_hash, event_count, anchored_virtual_ms)   driver only; terminal states only; writes ChainHead
 // Errors: InsufficientEscrow, NotParty, BadState, GapNotExpired, ClockRegression, NotFullyFunded, WrongPath, AmountZero, Overflow
 ```
+Signer matrix: `initialize_scenario`, `start_race`, `advance_clock`, `release_leg1`, `declare_default`, `settle_atomic`, `mark_failed`, and `anchor_chain_head` are driver only (`NotParty` otherwise). `acknowledge` and `fund_leg` stay party signers, and `release_leg2` / `release_leg2_partial` stay party B only: the engine (driver) orchestrates the race while parties only acknowledge, fund, and choose whether to pay leg 2, and that choice is the counterparty risk being demonstrated. This also enforces the recorded driver-trusted clock decision, including the `i64::MAX - MAX_GAP_MS` bound that keeps `declare_default`'s deadline `checked_add` from ever overflowing.
+
+Path binding: the engine must derive the `start_race` path from the ticket so both lanes of one scenario match their ticket. Binding `path` to `ticket_hash` stays client-side via provenance rather than an on-chain check; the accepted risk is that an attacker gains nothing by mis-routing their own scenario, since every other guard still applies and the counterparty can always refuse to acknowledge or pay.
+
 TypeScript core:
 ```text
 money.ts         parse_cents(s): bigint; add(a,b); sub_checked(a,b): bigint | Error; fmt(cents, ccy): string
