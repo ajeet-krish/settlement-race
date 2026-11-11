@@ -28,3 +28,8 @@ check-cfg = ['cfg(target_os, values("solana"))']
 [dependencies]
 anchor-lang = "1.2.2"
 anchor-spl = "1.2.2"
+
+[dev-dependencies]
+# anchor-litesvm 0.4.0 depends on anchor-lang ^1.0.0 (unifies to the pinned
+# 1.2.2) and litesvm 0.11, matching the Phase 1 anchor-litesvm test decision.
+anchor-litesvm = "0.4.0"

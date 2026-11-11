@@ -16,4 +16,9 @@ wallet = "~/.config/solana/id.json"
 # Phase 2 adds LiteSVM integration tests under programs/settlement-race/tests/;
 # cargo test-sbf builds the SBF artifact and runs them plus the Rust unit tests.
 # App logic is covered by Vitest under app/ instead (see docs/decisions.md).
-test = "cargo test-sbf --manifest-path programs/settlement-race/Cargo.toml"
+# --tools-version pins platform-tools v1.54: unpinned resolution falls back to
+# the built-in v1.51 (cargo 1.84) when the GitHub latest lookup fails, and that
+# cargo cannot parse the edition 2024 dependency manifests in this tree.
+# --arch v0 keeps the default SBPF v0 artifact shape, which is what LiteSVM
+# 0.11 in the anchor-litesvm suite loads (anchor build targets arch v3 instead).
+test = "cargo test-sbf --manifest-path programs/settlement-race/Cargo.toml --tools-version v1.54 --arch v0"

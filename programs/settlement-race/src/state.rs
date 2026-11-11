@@ -1,8 +1,9 @@
 //! State schema for Settlement Race.
 //!
-//! This module defines the on-chain account shapes only. Behavior lives in the
-//! instruction handlers (Phase 2). All monetary values are integer cents (u64),
-//! never floats, per the project convention.
+//! This module defines the on-chain account shapes and small status helpers.
+//! Behavior lives in the instruction handlers under `instructions/`. All
+//! monetary values are integer cents (u64), never floats, per the project
+//! convention.
 
 use anchor_lang::prelude::*;
 
@@ -21,6 +22,16 @@ pub enum RaceStatus {
     Defaulted,
     /// Terminal failure marked by the driver or engine.
     Failed,
+}
+
+impl RaceStatus {
+    /// Terminal statuses (Settled, Defaulted, Failed) never reopen.
+    pub fn is_terminal(self) -> bool {
+        matches!(
+            self,
+            RaceStatus::Settled | RaceStatus::Defaulted | RaceStatus::Failed
+        )
+    }
 }
 
 /// Which settlement route the scenario follows.

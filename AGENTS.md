@@ -37,8 +37,8 @@ cd app && npm run lint  # Lint frontend (when configured)
 | Phase | Description | Status |
 |-------|-------------|--------|
 | 1 | Bootstrap and schema | Complete |
-| 2 | Anchor program and tests | In Progress |
-| 3 | Provenance module | |
+| 2 | Anchor program and tests | Complete |
+| 3 | Provenance module | In Progress |
 | 4 | Race UI | |
 | 5 | Educational layer | |
 | 6 | Offline mode and polish | |

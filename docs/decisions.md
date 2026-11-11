@@ -1,6 +1,6 @@
 # Settlement Race Decision Records
 
-Last updated: 2026-11-10
+Last updated: 2026-11-11
 
 ## 2026-11-10 (Phase 1): Anchor framework over native Rust
 **Context**: The program needs escrow vaults, PDA-signed token CPIs, and a small state machine, built in a 4 to 6 day budget.
@@ -79,3 +79,21 @@ Last updated: 2026-11-10
 **Decision**: Pin avm and anchor-cli to 1.2.2, anchor-lang and anchor-spl to 1.2.2 (same 1.x line, @anchor-lang/core rename still applies). The 1.2.2 crates depend on solana-* 3.x/4.x crates which cover the installed Agave 4.3.2 toolchain.
 **Rationale**: Verified compatible: anchor build and cargo test-sbf both pass with zero warnings against the installed toolchain.
 **Trade-offs**: The 1.0.x record above is retained as history; this record is authoritative for the pinned versions.
+
+## 2026-11-11 (Phase 2): start_race funding gate is USD exact plus CAD nonzero
+**Context**: The race start needs a symmetric commitment signal, but underfunded CAD is precisely the counterparty risk that the default, late payment, and partial payment scenarios must exercise.
+**Decision**: start_race requires status Ack, funded_usd_cents == leg1_usd_cents exactly, and funded_cad_cents > 0 (not both legs exact). Full CAD enforcement lives in settle_atomic, which fails with InsufficientEscrow when either vault cannot cover its leg.
+**Rationale**: Requiring exact CAD at start would make every underfunded scenario unstartable; the atomic path already re-checks both vaults at settlement time, so its safety does not depend on the start gate.
+**Trade-offs**: start_race alone does not imply atomic settleability; the UI and Phase 5 explainer must present atomic readiness as a settlement time property, not a start state.
+
+## 2026-11-11 (Phase 2): validateTicket accepts unknown keys
+**Context**: validateTicket enforces schema version 1 field types, literals, and formats, but does not reject keys it does not recognize, and the review asked whether strict key rejection is needed now.
+**Decision**: Unknown keys in validateTicket remain ACCEPTED. Canonical JSON includes them, so they are covered by the ticket hash. Strict key rejection is deferred to the Phase 5 paste-import tooling, where untrusted input actually arrives, and will be decided at that time.
+**Rationale**: The hash already covers every present key, so an unknown key cannot change a hashed ticket undetected; current callers build tickets from known fields, and rejection only matters when a user pastes external JSON.
+**Trade-offs**: A ticket carrying extra keys validates successfully today; hash integrity is unaffected, but a stricter schema check is postponed until the paste-import surface exists.
+
+## 2026-11-11 (Phase 2): Driver-only orchestration matrix and escrow payout cap
+**Context**: The security review found three Medium issues. First, anyone can donate SPL tokens straight into a vault PDA, and `release_leg2_partial` only capped payouts at `leg2_cad_cents - paid_cad_cents` and the live vault balance, so a donation let party B push `paid_cad_cents` above `funded_cad_cents`; `declare_default` then failed its `funded - paid` checked_sub with Overflow forever, permanently bricking the default path (the donation attack). Second, `start_race`, `advance_clock`, `release_leg1`, `declare_default`, and `settle_atomic` accepted any authorized signer, so a hostile counterparty could force the settlement route, drive the virtual clock (fast-forward past the gap window to trigger default instantly), and, by advancing to `i64::MAX` before the leg 1 stamp, make the deadline `checked_add` overflow so `declare_default` could never run (clock fast-forward and deadline brick vectors). This also contradicted the recorded driver-trusted clock decision and the docs that assign clock advancement to the driver.
+**Decision**: Restrict `start_race`, `advance_clock`, `release_leg1`, `declare_default`, and `settle_atomic` to the driver (`require_keys_eq!(signer, scenario.driver)` -> `NotParty`), joining `initialize_scenario`, `mark_failed`, and `anchor_chain_head`; `acknowledge` and `fund_leg` remain party signers and `release_leg2` / `release_leg2_partial` remain party B only. Cap every sequential payout at `funded_cad_cents - paid_cad_cents` with checked_sub (`InsufficientEscrow` otherwise) in both `release_leg2` and `release_leg2_partial`, alongside the existing remaining-notional and vault-balance caps. Bound `advance_clock` so `to_virtual_ms <= i64::MAX - MAX_GAP_MS` (`BadState` otherwise), which guarantees `leg1_released_at_ms + gap_ms` can never overflow at `declare_default`.
+**Rationale**: The engine (driver) orchestrates the race; parties only acknowledge, fund, and choose whether to pay leg 2, and that refusal choice is the counterparty risk the demo exists to show. Binding the full payout to recorded funding means a donation can only ever be a gift that sits in the vault (or is reclaimed at most up to `funded - paid`), never an over-payment that bricks the state machine. The clock bound closes the overflow brick while leaving the driver-trusted clock model intact: full release remains reachable exactly when the lane was fully funded, which is the honest and late-payment flow, and underfunded lanes use the partial release as designed.
+**Trade-offs**: A counterparty can no longer self-serve any orchestration step, so a stalled engine (rather than a hostile party) now gates progress; acceptable for a demo where one wallet plays the engine. The path chosen at `start_race` is still not bound to `ticket_hash` on chain; path binding stays client-side via provenance, an accepted risk because an attacker gains nothing by mis-routing their own scenario. The `i64::MAX - MAX_GAP_MS` bound rejects absurd clock targets rather than saturating, and donated tokens remain locked in the vault with no sweep instruction (already documented as an Info finding).

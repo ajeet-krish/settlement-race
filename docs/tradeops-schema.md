@@ -73,7 +73,7 @@ SETTLED, DEFAULTED, FAILED: terminal states with no outbound transitions.
 | `NEW` | `ACK_B` | `NEW` | signer is party B, `ack_b` was false | Status becomes `ACK` only when both flags are true. |
 | `NEW` | `ACK_A` or `ACK_B` | `ACK` | this was the second acknowledgement | Both `ack_a` and `ack_b` true. |
 | `ACK` | `RACE_STARTED` | `PAYING` | both parties acknowledged | Funding and the gap clock begin. |
-| `PAYING` | `LEG_FUNDED` | `PAYING` | signer is a party, amount greater than zero | Escrow balances increase; never decreases the wrong leg. |
+| `ACK` | `LEG_FUNDED` | `ACK` | signer is a party, amount greater than zero | Escrow balances increase; never decreases the wrong leg. Funding is accepted in `ACK` only: `NEW`, `PAYING`, and terminal states reject with `BadState`. |
 | `PAYING` | `LEG1_RELEASED` | `PAYING` | sequential path, escrow covers leg 1 | Records `leg1_released_at_ms`, starts the gap window. |
 | `PAYING` | `LEG2_PARTIAL` | `PAYING` | sequential path, amount less than remaining leg 2 | Partial recovery is visible as `paid_cad_cents`. |
 | `PAYING` | `LEG2_RELEASED` | `SETTLED` | sequential path, full leg 2 paid | Allowed after gap expiry only until a default is declared, which is how `late_payment` still settles. |
@@ -81,7 +81,7 @@ SETTLED, DEFAULTED, FAILED: terminal states with no outbound transitions.
 | `PAYING` | `ATOMIC_SETTLED` | `SETTLED` | atomic path, both legs fully funded in the same transaction | Delivery-versus-payment: both legs or neither (research.md section 5). |
 | `PAYING` | `ATOMIC_REVERTED` | `FAILED` | atomic path, funding check failed | The settlement transaction itself rolls back with no funds moved; the engine then marks the scenario failed in a follow-up transaction. |
 | `PAYING` | `FAILED_MARKED` | `FAILED` | driver marks an unrecoverable condition | Terminal, used by the engine after a revert and by `mark_failed`. |
-| `PAYING` | `CLOCK_ADVANCED` | `PAYING` | `to_ms >= virtual_now_ms` | Virtual time only moves forward; regression is `ClockRegression`. |
+| `NEW`, `ACK`, `PAYING` | `CLOCK_ADVANCED` | `unchanged` | `to_ms >= virtual_now_ms` | Allowed in any non terminal state (`NEW`, `ACK`, `PAYING`); terminal states (`SETTLED`, `DEFAULTED`, `FAILED`) reject with `BadState`. Virtual time only moves forward; regression is `ClockRegression`. |
 | any | anything else | unchanged or error | state does not permit it | Rejected with `BadState`, `NotParty`, `WrongPath`, `InsufficientEscrow`, `AmountZero`, or `Overflow`. |
 
 The race is pedagogical: on the sequential path the gap between `LEG1_RELEASED` and `LEG2_RELEASED` is the Herstatt style exposure window (research.md sections 1 and 6), and the atomic path has no such window because both legs share one transaction.
