@@ -6,3 +6,8 @@ dist/
 test-ledger/
 .env
 *.log
+.DS_Store
+
+# Devnet setup output: pubkeys plus party keypair secrets (devnet only)
+scripts/devnet-accounts.json
+scripts/devnet-keypairs.json

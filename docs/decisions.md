@@ -1,0 +1,81 @@
+# Settlement Race Decision Records
+
+Last updated: 2026-11-10
+
+## 2026-11-10 (Phase 1): Anchor framework over native Rust
+**Context**: The program needs escrow vaults, PDA-signed token CPIs, and a small state machine, built in a 4 to 6 day budget.
+**Decision**: Use Anchor 1.0.x for the settlement program.
+**Rationale**: Declarative account constraints, generated IDL, and standard escrow CPI patterns cut build and audit time dramatically.
+**Trade-offs**: Less control over compute and serialization; entirely acceptable for a devnet educational program.
+
+## 2026-11-10 (Phase 1): Anchor 1.0 toolchain and TS package rename
+**Context**: Anchor 1.0 (April 2026) renamed the TS package to @anchor-lang/core and targets Solana 3.x.
+**Decision**: Pin Anchor 1.0.x via avm, Solana CLI 3.1.x, and import @anchor-lang/core in app code and tests.
+**Rationale**: New workspace should start on the stable major, not the legacy @coral-xyz/anchor line.
+**Trade-offs**: Most online tutorials reference old names; README must call out the rename.
+
+## 2026-11-10 (Phase 1): Escrow PDA pre-funding with signature-gated leg 2
+**Context**: Fairness requires identical balances and funding for both paths, yet the sequential path must still show a real default window.
+**Decision**: Both parties pre-fund program vault PDAs; the atomic path releases both legs in one instruction; the sequential path releases legs in two instructions where leg 2 requires Party B's signature and declare_default returns unpaid CAD escrow to Party B after gap expiry.
+**Rationale**: Identical starting state makes the race comparison honest, while a signature-gated second leg keeps a genuine counterparty failure mode (Party A paid out USD and is exposed).
+**Trade-offs**: Default is modeled as signature refusal plus escrow reclamation, not raw non-payment; the UI and phase 5 explainer must state this explicitly.
+
+## 2026-11-10 (Phase 1): Virtualized event clock as canonical time
+**Context**: Real devnet latency is variable and would make race timelines and risk windows irreproducible.
+**Decision**: A deterministic virtual clock (integer virtual milliseconds, monotonic, mirrored on-chain via advance_clock) is canonical for all race timing and gap checks; real block time and tx signatures are recorded as evidence only.
+**Rationale**: Reproducible timelines, offline fixture mode, and stable demos depend on deterministic time.
+**Trade-offs**: The virtual clock is driver-trusted and gameable; acceptable for play money on devnet, and labeled as a demo control in the UI.
+
+## 2026-11-10 (Phase 1): On-chain chain-head anchoring for provenance
+**Context**: A hash-chained log alone proves internal consistency but not existence at a point in time.
+**Decision**: Hash-chain provenance records (sha256 over canonical JSON) with client-side verify, plus one devnet tx per scenario storing the final chain hash in a ChainHead PDA.
+**Rationale**: The anchor converts self-verifiable history into real tamper evidence at negligible cost.
+**Trade-offs**: One extra instruction per scenario and a finalization step before anchoring.
+
+## 2026-11-10 (Phase 1): React + Vite + wallet-adapter over SolidJS and Kit
+**Context**: The plan locks React + Vite with wallet-adapter; Solana docs now prefer @solana/kit for new apps.
+**Decision**: Follow the lock: React 19 + Vite + strict TS with @solana/wallet-adapter-react; isolate wallet wiring in one hook for a future Kit migration.
+**Rationale**: Wallet-adapter is mature, well documented, and matches the approved plan; migration risk is deferred, not ignored.
+**Trade-offs**: Building on a legacy direction; accepted under the 4 to 6 day budget.
+
+## 2026-11-10 (Phase 1): Scripted counterparty bot over two wallet sessions
+**Context**: The demo must show Party B defaulting, paying late, and paying partially.
+**Decision**: One browser drives both parties: the user wallet is Party A, an in-memory devnet keypair played by the scripted bot is Party B.
+**Rationale**: Deterministic scenario playback, one-browser demo, no manual coordination.
+**Trade-offs**: Party B custody is not wallet-realistic; the bot's keypair handling is clearly labeled devnet play money.
+
+## 2026-11-10 (Phase 1): Integer cents money discipline
+**Context**: FX amounts and rates invite floating point drift; JSON numbers are IEEE 754 in JS.
+**Decision**: All money is integer cents (u64 in Rust, bigint in TS, decimal strings of cents in JSON); FX rate is an integer scaled by 1,000,000; no floats anywhere.
+**Rationale**: Exact arithmetic, byte-stable fixtures, and honest money semantics.
+**Trade-offs**: More verbose payloads and explicit conversions at display boundaries.
+
+## 2026-11-10 (Phase 1): Legacy SPL Token mints with 2 decimals
+**Context**: Tokenized USD and CAD legs need mint accounts on devnet.
+**Decision**: Two legacy SPL Token mints (USD, CAD) with 2 decimals so base units equal cents; mint authority held by the setup script keypair.
+**Rationale**: Maximum wallet and tooling compatibility; decimals match the integer-cent convention.
+**Trade-offs**: No Token-2022 features (hooks, transfer fees); none are needed.
+
+## 2026-11-10 (Phase 1): LiteSVM Rust suite behind anchor test
+**Context**: anchor test must cover escrow invariants and the settlement state machine.
+**Decision**: Integration tests in programs/settlement-race/tests/ on the anchor-litesvm crate, run by anchor test; pure state and money logic gets Rust unit tests; app logic gets Vitest suites including golden fixtures.
+**Rationale**: LiteSVM is the current recommended Anchor harness: fast, deterministic, no validator boot.
+**Trade-offs**: TS client glue is not exercised by anchor test; mitigated by Vitest coverage against the mock client and one devnet smoke script.
+
+## 2026-11-10 (Phase 1): ProgramClient interface for offline fixture mode
+**Context**: Phase 6 requires an offline fixture demo with zero code duplication.
+**Decision**: Define a ProgramClient interface in app/src/lib/programClient.ts with an Anchor devnet implementation and a mock fixture implementation; the scenario engine, bot, and UI depend only on the interface.
+**Rationale**: Offline mode becomes a dependency swap instead of a second app.
+**Trade-offs**: Some interface discipline overhead from day one.
+
+## 2026-11-10 (Phase 1): Canonical JSON hashing for tickets and records
+**Context**: Hash chains require byte-stable serialization across browser and Node.
+**Decision**: canonical JSON (keys sorted lexicographically, no whitespace, UTF-8) is the hash input for ticket_hash and provenance record hashes; genesis prev_hash is 64 hex zeros.
+**Rationale**: Deterministic hashing independent of object key order and platform.
+**Trade-offs**: Canonicalization bugs would break verification; locked by golden fixture tests in phase 1.
+
+## 2026-11-10 (Phase 1): Anchor pinned to 1.2.2 with solana CLI 4.3.2 (supersedes toolchain record above)
+**Context**: The original record assumed Anchor 1.0.x with Solana CLI 3.1.x, but the actual machine has solana CLI 4.3.2 (Agave) installed and the CLI was not to be downgraded. Code review flagged the drift.
+**Decision**: Pin avm and anchor-cli to 1.2.2, anchor-lang and anchor-spl to 1.2.2 (same 1.x line, @anchor-lang/core rename still applies). The 1.2.2 crates depend on solana-* 3.x/4.x crates which cover the installed Agave 4.3.2 toolchain.
+**Rationale**: Verified compatible: anchor build and cargo test-sbf both pass with zero warnings against the installed toolchain.
+**Trade-offs**: The 1.0.x record above is retained as history; this record is authoritative for the pinned versions.

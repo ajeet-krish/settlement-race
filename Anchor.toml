@@ -1,0 +1,19 @@
+[toolchain]
+anchor_version = "1.2.2"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.devnet]
+settlement_race = "4watv8QyNJ5zjLkh4QYpUKDuFf24SAKzSRLAPMxoWNB3"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+# Phase 2 adds LiteSVM integration tests under programs/settlement-race/tests/;
+# cargo test-sbf builds the SBF artifact and runs them plus the Rust unit tests.
+# App logic is covered by Vitest under app/ instead (see docs/decisions.md).
+test = "cargo test-sbf --manifest-path programs/settlement-race/Cargo.toml"

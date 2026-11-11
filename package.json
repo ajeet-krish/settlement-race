@@ -1,0 +1,19 @@
+{
+  "name": "settlement-race",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Tokenized USD/CAD exchange on Solana devnet comparing sequential pay-first settlement against atomic delivery-versus-payment",
+  "scripts": {
+    "setup:devnet": "tsx scripts/setup-devnet.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@solana/spl-token": "^0.4.15",
+    "@solana/web3.js": "^1.99.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
+  }
+}
