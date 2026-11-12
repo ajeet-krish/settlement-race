@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { RaceEvent } from "../engine/scenarioEngine";
 import type { ScenarioSpec } from "../engine/scenarios";
+import { raceModeCopy, type RaceMode } from "../lib/raceSource";
 import type { ScenarioKind } from "../lib/ticket";
 import BalancePanel from "./race/BalancePanel";
 import ChainStatusIndicator from "./race/ChainStatusIndicator";
@@ -38,6 +39,19 @@ export interface RacePanelProps {
      * onRun.
      */
     source?: RaceSource;
+    /**
+     * Which ledger the engine source drives right now: "live" (the
+     * default) sends devnet transactions, "offline" runs the same
+     * engine against an in-memory mock. Drives the mode switch, the
+     * header badge, and the evidence word on the chain pill.
+     */
+    mode?: RaceMode;
+    /**
+     * Switch between live devnet and the offline demo. Absent (the
+     * default) hides the switch, which keeps standalone renders to the
+     * transport contract only.
+     */
+    onModeChange?: (mode: RaceMode) => void;
     /** Events yielded so far, in shared chain order. */
     events?: readonly RaceEvent[];
     /** Scenario the stream belongs to, when the caller already knows it. */
@@ -59,7 +73,10 @@ export interface RacePanelProps {
 /**
  * Composition root of the race view: scenario picker, disconnected empty
  * state, transport bar, twin lane track, balances, and event log. The
- * panel owns only presentation playback state (play, speed, wall
+ * header also carries the mode switch (live devnet against offline
+ * demo), the mode badge, and the evidence word on the chain pill, all
+ * driven by the mode prop so the panel never decides which ledger it is
+ * on. The panel owns only presentation playback state (play, speed, wall
  * elapsed); everything engine or account related arrives through props,
  * so wiring demo accounts and the Anchor client never touches this file's
  * logic. The displayed clock interpolates with raceTiming and snaps to
@@ -70,6 +87,8 @@ export interface RacePanelProps {
  */
 export default function RacePanel({
     source = "disconnected",
+    mode = "live",
+    onModeChange,
     events = [],
     scenario = null,
     onRun,
@@ -83,6 +102,7 @@ export default function RacePanel({
     const [wallMs, setWallMs] = useState(0);
     const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
     const previousLength = useRef(0);
+    const modeCopy = raceModeCopy(mode);
 
     // Follow the scenario prop when a caller states one explicitly.
     useEffect(() => {
@@ -194,8 +214,61 @@ export default function RacePanel({
                         payment, replayed on one shared virtual clock.
                     </p>
                 </div>
-                <ChainStatusIndicator status={chainStatus} />
+                <div className="race-head-side">
+                    {onModeChange !== undefined && (
+                        <div
+                            className="race-mode"
+                            role="group"
+                            aria-label="Settlement source"
+                        >
+                            <button
+                                type="button"
+                                className={`race-mode-btn${
+                                    mode === "live" ? " race-mode-active" : ""
+                                }`}
+                                aria-pressed={mode === "live"}
+                                disabled={running}
+                                title={
+                                    running
+                                        ? "A run is in progress"
+                                        : "Switch to live devnet"
+                                }
+                                onClick={() => onModeChange("live")}
+                            >
+                                Live devnet
+                            </button>
+                            <button
+                                type="button"
+                                className={`race-mode-btn${
+                                    mode === "offline"
+                                        ? " race-mode-active"
+                                        : ""
+                                }`}
+                                aria-pressed={mode === "offline"}
+                                disabled={running}
+                                title={
+                                    running
+                                        ? "A run is in progress"
+                                        : "Switch to the offline demo"
+                                }
+                                onClick={() => onModeChange("offline")}
+                            >
+                                Offline demo
+                            </button>
+                        </div>
+                    )}
+                    <div className="race-head-status">
+                        <p className={`mode-badge mode-badge-${mode}`}>
+                            {modeCopy.badge}
+                        </p>
+                        <ChainStatusIndicator status={chainStatus} mode={mode} />
+                    </div>
+                </div>
             </div>
+
+            {modeCopy.note !== null ? (
+                <p className="race-mode-note">{modeCopy.note}</p>
+            ) : null}
 
             <ScenarioPicker selected={selected} onSelect={setSelected} />
 

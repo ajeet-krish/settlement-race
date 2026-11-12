@@ -41,7 +41,7 @@ cd app && npm run lint  # Lint frontend (when configured)
 | 3 | Provenance module | Complete |
 | 4 | Race UI | Complete |
 | 5 | Educational layer | Complete |
-| 6 | Offline mode and polish | In Progress |
+| 6 | Offline mode and polish | Complete |
 
 ## Deep Docs
 

@@ -1,0 +1,726 @@
+/*
+ * Provenance view: verify slab, chain table, tamper demo, and
+ * transaction evidence. Single class selectors only, matching
+ * shell.css and race.css, so layers never fight over specificity.
+ * Every colour is a theme token or a color mix of one: teal marks a
+ * valid chain and matched evidence, clay a broken verdict and missing
+ * evidence, amber the broken link itself and the focus ring, steel the
+ * chrome. Mono carries every hash, signature, and verdict word.
+ */
+
+/* The chain table needs room for eight columns plus the detail
+   toggle, so this modifier sets the custom property shell.css's
+   .panel cap reads through var(--panel-max, 44rem). It travels on the
+   element itself, so load order cannot matter. */
+.panel-provenance {
+    --panel-max: 72rem;
+}
+
+.prov {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+}
+
+.prov-head {
+    align-items: flex-start;
+    display: flex;
+    gap: var(--space-4);
+    justify-content: space-between;
+}
+
+.prov-lede {
+    color: var(--text-muted);
+    font-size: var(--text-lg);
+    margin: var(--space-1) 0 0;
+    max-width: 46rem;
+}
+
+/* Empty state: an amber dashed slip that invites a run instead of
+   dead ending, the same idiom as the race disconnected slip. */
+.prov-empty {
+    border: 1px dashed color-mix(in srgb, var(--exposure-amber) 60%, transparent);
+    border-radius: 2px;
+    padding: var(--space-4) var(--space-5);
+}
+
+.prov-empty-title {
+    color: var(--exposure-amber);
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    margin: 0 0 var(--space-2);
+}
+
+.prov-empty-body {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    margin: 0;
+    max-width: 40rem;
+}
+
+/* Console card: every provenance block sits on this raised petrol
+   plate, the race view's picker and log idiom. */
+.prov-card {
+    background-color: color-mix(in srgb, var(--steel-rule) 16%, var(--settle-ground));
+    border: 1px solid var(--steel-rule);
+    border-radius: 2px;
+    padding: var(--space-4) var(--space-5);
+}
+
+.prov-title {
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    margin: 0 0 var(--space-3);
+}
+
+.prov-lede-sm {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    margin: 0 0 var(--space-3);
+    max-width: 52rem;
+}
+
+.prov-verify-head {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    justify-content: space-between;
+    margin-bottom: var(--space-3);
+}
+
+.prov-verify-head .prov-title {
+    margin: 0;
+}
+
+/* Verify: the amber primary button, the run idiom. */
+.prov-verify-btn {
+    background-color: var(--exposure-amber);
+    border: 1px solid var(--exposure-amber);
+    border-radius: 2px;
+    color: var(--settle-ground);
+    cursor: pointer;
+    font-family: var(--font-display);
+    font-size: var(--text-base);
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    min-height: 44px;
+    padding: 0 var(--space-5);
+    transition: filter var(--motion-fast) var(--ease-out);
+}
+
+.prov-verify-btn:hover:not(:disabled) {
+    filter: brightness(1.08);
+}
+
+.prov-verify-btn:disabled {
+    background-color: transparent;
+    border-color: var(--steel-rule);
+    color: var(--text-faint);
+    cursor: not-allowed;
+}
+
+/* Secondary actions: outlined steel, mono, the speed button idiom. */
+.prov-tamper-btn,
+.prov-fetch-btn {
+    background-color: transparent;
+    border: 1px solid var(--steel-rule);
+    border-radius: 2px;
+    color: var(--advice-bone);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    letter-spacing: 0.02em;
+    min-height: 44px;
+    padding: 0 var(--space-4);
+    transition:
+        border-color var(--motion-fast) var(--ease-out),
+        color var(--motion-fast) var(--ease-out);
+}
+
+.prov-tamper-btn:hover:not(:disabled),
+.prov-fetch-btn:hover:not(:disabled) {
+    border-color: var(--advice-bone);
+}
+
+.prov-tamper-btn:disabled,
+.prov-fetch-btn:disabled {
+    color: var(--text-faint);
+    cursor: not-allowed;
+}
+
+/* Verdict slab: the signature moment. VALID reads teal like finality,
+   BROKEN reads clay like loss, idle stays steel. Reduced motion is
+   handled globally by theme.css; the slab itself never animates. */
+.prov-verdict {
+    border: 1px solid;
+    border-radius: 2px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin-bottom: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+}
+
+.prov-verdict-word {
+    font-family: var(--font-mono);
+    font-size: var(--text-2xl);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    line-height: 1.2;
+}
+
+.prov-verdict-detail {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+}
+
+.prov-verdict-valid {
+    background-color: color-mix(in srgb, var(--finality-teal) 10%, transparent);
+    border-color: color-mix(in srgb, var(--finality-teal) 55%, transparent);
+}
+
+.prov-verdict-valid .prov-verdict-word {
+    color: var(--finality-teal);
+}
+
+.prov-verdict-broken {
+    background-color: color-mix(in srgb, var(--default-clay) 10%, transparent);
+    border-color: color-mix(in srgb, var(--default-clay) 60%, transparent);
+}
+
+.prov-verdict-broken .prov-verdict-word {
+    color: var(--default-clay);
+}
+
+.prov-verdict-idle {
+    border-color: var(--steel-rule);
+}
+
+.prov-verdict-idle .prov-verdict-word {
+    color: var(--text-muted);
+    font-size: var(--text-xl);
+}
+
+/* Anchor comparison: a label line over a two column definition grid.
+   The cells only claim what the run's verdict supports. */
+.prov-anchor-label {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    margin: 0 0 var(--space-2);
+    text-transform: uppercase;
+}
+
+.prov-anchor-label-valid {
+    color: var(--finality-teal);
+}
+
+.prov-anchor-label-broken {
+    color: var(--default-clay);
+}
+
+.prov-anchor-label-pending {
+    color: var(--text-muted);
+}
+
+.prov-anchor-grid {
+    display: grid;
+    gap: var(--space-1) var(--space-3);
+    grid-template-columns: 12rem 1fr;
+    margin: 0;
+}
+
+.prov-anchor-grid dt {
+    align-self: center;
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.prov-anchor-grid dd {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin: 0;
+}
+
+.prov-cell {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
+
+.prov-cell-match {
+    color: var(--finality-teal);
+}
+
+.prov-cell-unknown {
+    color: var(--advice-bone);
+}
+
+.prov-cell-unchecked {
+    color: var(--text-faint);
+}
+
+.prov-anchor-value {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+}
+
+.prov-anchor-note {
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    margin: var(--space-3) 0 0;
+    max-width: 54rem;
+}
+
+/* Table: mono throughout, hashes shortened in the cells and shown in
+   full in the expanded detail row. */
+.prov-table-caption {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    margin: 0 0 var(--space-3);
+}
+
+.prov-table-wrap {
+    border: 1px solid var(--steel-rule);
+    border-radius: 2px;
+    overflow-x: auto;
+}
+
+.prov-table {
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    width: 100%;
+}
+
+.prov-table th {
+    background-color: var(--settle-ground);
+    border-bottom: 1px solid var(--steel-rule);
+    color: var(--text-faint);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    padding: var(--space-2) var(--space-3);
+    text-align: left;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.prov-table td {
+    border-bottom: 1px solid color-mix(in srgb, var(--steel-rule) 60%, transparent);
+    padding: var(--space-2) var(--space-3);
+    vertical-align: middle;
+}
+
+.prov-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.prov-seq {
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+}
+
+.prov-ts {
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.prov-lane {
+    border: 1px solid;
+    border-radius: 2px;
+    display: inline-block;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 0 4px;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.prov-lane-sequential {
+    border-color: color-mix(in srgb, var(--exposure-amber) 55%, transparent);
+    color: var(--exposure-amber);
+}
+
+.prov-lane-atomic {
+    border-color: color-mix(in srgb, var(--finality-teal) 55%, transparent);
+    color: var(--finality-teal);
+}
+
+.prov-event {
+    color: var(--advice-bone);
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+}
+
+.prov-actor {
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    white-space: nowrap;
+}
+
+.prov-mono {
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.prov-hash-cell {
+    align-items: center;
+    display: inline-flex;
+    gap: var(--space-2);
+}
+
+.prov-none {
+    color: var(--text-faint);
+    font-size: var(--text-xs);
+}
+
+.prov-toggle-cell {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.prov-toggle {
+    background-color: transparent;
+    border: 1px solid var(--steel-rule);
+    border-radius: 2px;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: 0.04em;
+    min-height: 32px;
+    min-width: 4.5rem;
+    padding: 0 var(--space-2);
+    transition:
+        border-color var(--motion-fast) var(--ease-out),
+        color var(--motion-fast) var(--ease-out);
+}
+
+.prov-toggle:hover {
+    border-color: var(--advice-bone);
+    color: var(--advice-bone);
+}
+
+/* The broken link: amber is the exposure and alert colour, so the bad
+   row wears an amber rule and an amber seq while the verdict above
+   names it in clay. Amber never means valid. */
+.prov-row-broken {
+    background-color: color-mix(in srgb, var(--exposure-amber) 14%, transparent);
+    box-shadow: inset 3px 0 0 var(--exposure-amber);
+}
+
+.prov-row-broken .prov-seq {
+    color: var(--exposure-amber);
+    font-weight: 600;
+}
+
+/* Expanded detail: full payload on the left, full record link on the
+   right, stacking on narrow screens. */
+.prov-detail-row td {
+    background-color: color-mix(in srgb, var(--steel-rule) 10%, var(--settle-ground));
+    padding: var(--space-3) var(--space-4);
+}
+
+.prov-detail {
+    display: grid;
+    gap: var(--space-4);
+    grid-template-columns: minmax(14rem, 1fr) minmax(16rem, 1fr);
+}
+
+.prov-detail-label {
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: 0.08em;
+    margin: 0 0 var(--space-1);
+    text-transform: uppercase;
+}
+
+.prov-json {
+    background-color: var(--settle-ground);
+    border: 1px solid var(--steel-rule);
+    border-radius: 2px;
+    color: var(--advice-bone);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    line-height: 1.5;
+    margin: 0;
+    max-height: 14rem;
+    overflow: auto;
+    padding: var(--space-2) var(--space-3);
+    white-space: pre;
+}
+
+.prov-detail-list {
+    display: grid;
+    gap: var(--space-2) var(--space-3);
+    grid-template-columns: 9rem 1fr;
+    margin: 0;
+}
+
+.prov-detail-list dt {
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.prov-detail-list dd {
+    align-items: flex-start;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin: 0;
+}
+
+.prov-mono-full {
+    color: var(--advice-bone);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    word-break: break-all;
+}
+
+/* Copy control: a ghost mono button that only shows its border on
+   hover or focus, swapping its label to Copied with a teal tint. */
+.prov-copy {
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    color: var(--text-faint);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: 0.04em;
+    min-height: 24px;
+    padding: 0 var(--space-2);
+    transition:
+        border-color var(--motion-fast) var(--ease-out),
+        color var(--motion-fast) var(--ease-out);
+}
+
+.prov-copy:hover {
+    border-color: var(--steel-rule);
+    color: var(--advice-bone);
+}
+
+.prov-copy-ok {
+    color: var(--finality-teal);
+}
+
+.prov-copy-fail {
+    color: var(--default-clay);
+}
+
+/* Tamper demo result: clay tinted, because the demo verdict is a
+   BROKEN verdict even though the copy it describes is disposable. */
+.prov-tamper-result {
+    background-color: color-mix(in srgb, var(--default-clay) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--default-clay) 60%, transparent);
+    border-radius: 2px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+}
+
+.prov-tamper-verdict {
+    color: var(--default-clay);
+    font-family: var(--font-mono);
+    font-size: var(--text-base);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    margin: 0;
+}
+
+.prov-tamper-edit {
+    color: var(--advice-bone);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.prov-tamper-explain {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    margin: 0;
+}
+
+.prov-tamper-original {
+    border-top: 1px solid color-mix(in srgb, var(--steel-rule) 80%, transparent);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    margin: 0;
+    padding-top: var(--space-2);
+}
+
+.prov-tamper-original-ok {
+    color: var(--finality-teal);
+}
+
+.prov-tamper-original-bad {
+    color: var(--default-clay);
+}
+
+/* Evidence: spelled out cells so colour is never the only signal. */
+.prov-flag {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.prov-flag-yes {
+    color: var(--finality-teal);
+}
+
+.prov-flag-no {
+    color: var(--default-clay);
+}
+
+.prov-flag-detail {
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+}
+
+.prov-evidence-summary {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    margin: var(--space-3) 0 var(--space-2);
+}
+
+.prov-evidence-check {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    margin: 0 0 var(--space-2);
+}
+
+.prov-evidence-check-ok {
+    color: var(--finality-teal);
+}
+
+.prov-evidence-check-bad {
+    color: var(--default-clay);
+}
+
+.prov-evidence-note {
+    color: var(--text-faint);
+    font-size: var(--text-xs);
+    margin: 0;
+    max-width: 54rem;
+}
+
+/* Slips: offline honesty in bone, idle prompts in steel, transport
+   trouble in clay, matching the race notice idiom. */
+.prov-slip {
+    border: 1px dashed;
+    border-radius: 2px;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    letter-spacing: 0.02em;
+    margin: 0;
+    padding: var(--space-3) var(--space-4);
+}
+
+.prov-slip-offline {
+    border-color: color-mix(in srgb, var(--advice-bone) 45%, transparent);
+    color: var(--advice-bone);
+}
+
+.prov-slip-idle {
+    border-color: var(--steel-rule);
+    color: var(--text-muted);
+}
+
+.prov-slip-fail {
+    border-color: color-mix(in srgb, var(--default-clay) 60%, transparent);
+    color: var(--default-clay);
+}
+
+/* Screen reader only text, used for the broken link marker and the
+   detail column header. */
+.prov-visually-hidden {
+    border: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+}
+
+/* Scroll affordance: hidden while the table fits, shown once it
+   cannot, so the hint never lies on wide screens. */
+.prov-scroll-hint {
+    color: var(--text-faint);
+    display: none;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: 0.04em;
+    margin: var(--space-2) 0 0;
+}
+
+/* Stacks below 48rem: head, anchor grid, and detail blocks go
+   single column, the table keeps scrolling sideways with its hint. */
+@media (max-width: 48rem) {
+    .prov-head {
+        flex-direction: column;
+    }
+
+    .prov-card {
+        padding: var(--space-4);
+    }
+
+    .prov-verdict-word {
+        font-size: var(--text-xl);
+    }
+
+    .prov-anchor-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .prov-detail {
+        grid-template-columns: 1fr;
+    }
+
+    .prov-scroll-hint {
+        display: block;
+    }
+
+    .prov-verify-head {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .prov-tamper-btn,
+    .prov-fetch-btn {
+        width: 100%;
+    }
+}

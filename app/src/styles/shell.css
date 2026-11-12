@@ -148,6 +148,34 @@
     max-width: 38rem;
 }
 
+/* Lazy panel fallback: one quiet mono line in the loading copy tone
+   while a split panel chunk downloads. The pulse only runs for
+   visitors who have not asked for reduced motion, and theme.css's
+   global rule flattens it either way. */
+.panel-loading {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    letter-spacing: 0.04em;
+    margin: var(--space-5) 0 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .panel-loading {
+        animation: panel-loading-pulse 1.6s var(--ease-out) infinite alternate;
+    }
+}
+
+@keyframes panel-loading-pulse {
+    from {
+        opacity: 0.45;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
 @media (max-width: 40rem) {
     .shell-topbar {
         padding: var(--space-3) var(--space-3) 0;

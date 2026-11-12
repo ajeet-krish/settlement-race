@@ -156,7 +156,7 @@ Further reading:
 | 3 | Provenance module | Complete |
 | 4 | Race UI | Complete |
 | 5 | Educational layer | In Progress |
-| 6 | Offline mode and polish | |
+| 6 | Offline mode and polish | Complete |
 
 ## License and disclaimer
 

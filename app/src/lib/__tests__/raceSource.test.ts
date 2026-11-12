@@ -4,6 +4,7 @@ import type { Connection } from "@solana/web3.js";
 import {
     createRaceSource,
     nextScenarioIdBase,
+    raceModeCopy,
     type RaceChainVerifyContext,
     type RaceSourceOptions,
 } from "../raceSource";
@@ -12,10 +13,11 @@ import {
     DEMO_ACCOUNTS_MISSING_GUIDANCE,
     DemoAccountsError,
     base58Encode,
+    parseDemoAccounts,
     type DemoAccounts,
 } from "../demoAccounts";
 import { PROGRAM_ID, scenarioPda } from "../pda";
-import { getScenario } from "../../engine/scenarios";
+import { SCENARIOS, getScenario } from "../../engine/scenarios";
 import type { RaceEvent } from "../../engine/scenarioEngine";
 import type { InitScenarioArgs, ProgramClient } from "../programClient";
 
@@ -356,5 +358,165 @@ describe("nextScenarioIdBase", () => {
         const second = nextScenarioIdBase(nowMs);
         expect(second).toBe(first + 2n);
         expect(second % 2n).toBe(1n);
+    });
+});
+
+describe("createRaceSource offline mode", () => {
+    it("runs a full scenario against the mock and verifies the anchor", async () => {
+        const state = await createRaceSource({
+            mode: "offline",
+            // Every live seam must stay untouched offline: a loader, a
+            // verifier, and a probe that all throw the moment they are
+            // used, so chain_ok true can only come from the mock path.
+            loadAccounts: async () => {
+                throw new Error("offline must not load demo accounts");
+            },
+            verifyChain: async () => {
+                throw new Error("offline must not use the live verifier");
+            },
+            connection: {
+                getAccountInfo: vi.fn(async () => {
+                    throw new Error("offline must not probe the chain");
+                }),
+            } as unknown as Connection,
+        });
+
+        expect(state.status).toBe("ready");
+        if (state.status !== "ready") {
+            throw new Error(`expected ready, got ${state.status}`);
+        }
+        expect(state.accounts.note).toContain("Offline demo");
+        expect(state.createClient()).toBeInstanceOf(MockProgramClient);
+
+        const events: RaceEvent[] = [];
+        const outcome = await state.runScenario(getScenario("honest"), (e) =>
+            events.push(e),
+        );
+
+        // chain_ok true is the default verifier reading the mock's
+        // anchored ChainHead: head and event count matched the chain the
+        // engine just produced, entirely in memory.
+        expect(outcome.chain_ok).toBe(true);
+        expect(outcome.error).toBeUndefined();
+        expect(events.length).toBeGreaterThan(10);
+        expect(events[0]?.event).toBe("TICKET_CREATED");
+        expect(events.at(-1)?.event).toBe("CHAIN_ANCHORED");
+    });
+
+    it.each(SCENARIOS)(
+        "$kind runs offline through createRaceSource and verifies chain_ok true",
+        async (spec) => {
+            const state = await createRaceSource({ mode: "offline" });
+            if (state.status !== "ready") {
+                throw new Error(`expected ready, got ${state.status}`);
+            }
+
+            const outcome = await state.runScenario(spec);
+
+            expect(outcome.chain_ok).toBe(true);
+            expect(outcome.error).toBeUndefined();
+        },
+    );
+
+    it("keeps two offline runs independent: a fresh mock and the fixed id base", async () => {
+        const ids: bigint[] = [];
+        const clients: MockProgramClient[] = [];
+        const state = await createRaceSource({
+            mode: "offline",
+            buildOfflineClient: () => {
+                const client = new MockProgramClient();
+                clients.push(client);
+                const init = client.initScenario.bind(client);
+                client.initScenario = async (args: InitScenarioArgs) => {
+                    ids.push(args.scenario_id);
+                    return init(args);
+                };
+                return client;
+            },
+        });
+        if (state.status !== "ready") {
+            throw new Error(`expected ready, got ${state.status}`);
+        }
+
+        const firstEvents: RaceEvent[] = [];
+        const secondEvents: RaceEvent[] = [];
+        const first = await state.runScenario(
+            getScenario("honest"),
+            (e) => firstEvents.push(e),
+        );
+        const second = await state.runScenario(
+            getScenario("honest"),
+            (e) => secondEvents.push(e),
+        );
+
+        expect(first.chain_ok).toBe(true);
+        expect(second.chain_ok).toBe(true);
+        expect(firstEvents.length).toBeGreaterThan(10);
+        expect(secondEvents.length).toBeGreaterThan(10);
+
+        // One fresh mock per run: a shared instance would make run two
+        // collide on the fixed ids and fail instead of settling.
+        expect(clients).toHaveLength(2);
+        expect(clients[1]).not.toBe(clients[0]);
+        // Fixed base 1n every run: sequential 1, atomic 2, no Date.now
+        // stepping and no leftover state between runs.
+        expect(ids).toEqual([1n, 2n, 1n, 2n]);
+    });
+
+    it("surfaces an offline verification throw as chain_ok null with notice text", async () => {
+        const state = await createRaceSource({
+            mode: "offline",
+            verifyOfflineChain: async () => {
+                throw new Error("mock anchor missing");
+            },
+        });
+        if (state.status !== "ready") {
+            throw new Error(`expected ready, got ${state.status}`);
+        }
+
+        const outcome = await state.runScenario(getScenario("honest"));
+
+        expect(outcome.chain_ok).toBeNull();
+        expect(outcome.error).toContain(
+            "Chain verification could not read the anchor",
+        );
+        expect(outcome.error).toContain("mock anchor missing");
+    });
+
+    it("generates offline accounts that pass the demo accounts validator", async () => {
+        const state = await createRaceSource({ mode: "offline" });
+        if (state.status !== "ready") {
+            throw new Error(`expected ready, got ${state.status}`);
+        }
+
+        expect(() => parseDemoAccounts(state.accounts)).not.toThrow();
+        expect(state.accounts.note).toContain("never sent anywhere");
+        expect(state.accounts.program_id).toBe(PROGRAM_ID.toBase58());
+    });
+});
+
+describe("raceModeCopy", () => {
+    it("names both modes and keeps the offline tradeoff honest", () => {
+        const offline = raceModeCopy("offline");
+        expect(offline.badge).toBe("Offline demo");
+        expect(offline.loading).toContain("offline");
+        expect(offline.note).toContain("in-memory ledger");
+        expect(offline.note).toContain("no transactions");
+        expect(offline.note).toContain("no on-chain evidence");
+        expect(offline.note).toContain("mock state");
+
+        const live = raceModeCopy("live");
+        expect(live.badge).toBe("Devnet live");
+        expect(live.loading).toBe("Loading demo accounts...");
+        expect(live.note).toBeNull();
+    });
+
+    it("keeps mode copy free of em dashes, en dashes, and double hyphens", () => {
+        for (const mode of ["live", "offline"] as const) {
+            const copy = raceModeCopy(mode);
+            for (const text of [copy.badge, copy.loading, copy.note ?? ""]) {
+                expect(text).not.toMatch(/[\u2014\u2013]|--/);
+            }
+        }
     });
 });

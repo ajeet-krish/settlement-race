@@ -1,6 +1,6 @@
 # Settlement Race Test Results
 
-Last updated: 2026-11-12
+Last updated: 2026-11-12 (Phase 6 final)
 
 ## 2026-11-10 - Phase 1: Test Report
 
@@ -546,3 +546,70 @@ npx tsc --noEmit            # repo root, covers scripts/
 - When a second panel modifier copies the `--panel-max` pattern, extend `panelMaxWidth.test.ts` in the same slice: read the new stylesheet, pin the exact rem value inside the modifier rule block, assert no `max-width` in that block, and assert the App.tsx class pairing string. Doing it in-slice avoids the follow-up routing this round closed.
 - Qualifier restorations in sourced copy (`hypothetical`, `aiming at`) are verifiable with a literal string grep against the research wording; record the exact matched line so a later rewrite cannot silently drop the hedge again.
 - README roster claims and the tests.md entry that records the run should land together; when they cannot, tests.md must state the arithmetic (cited figure plus this round's delta) so the reconciliation is explicit rather than a silent drift.
+
+## 2026-11-12 - Phase 6: Final tester round (suite verification, vite test isolation fix, offline scenario coverage)
+
+Scope: final verification round for Phase 6. Independent execution of the Phase 6 verification commands, closure of the Security Low routed in docs/reviews.md (default-outDir cases in the vite exclusion test planting files in the real app/dist tree), and a permanent vitest pin for the five offline scenarios through `createRaceSource({mode: "offline"})`. Rust untouched this round: no cargo or anchor command was run, and the Phase 2 roster of 32 Rust tests stands as recorded above. Screenshots are out of scope by design (the user captures them manually).
+
+### Suite results (all executed by the tester)
+
+| Suite | Command | Result |
+|-------|---------|--------|
+| Vitest (app) | `cd app && npm test` | PASS: 26 files, 333 tests before this round's edits, 338 after (5 new offline tests below) |
+| Type check (app) | `cd app && npx tsc --noEmit` | PASS (strict mode, exit 0; re-run after the test edits, still exit 0) |
+| Type check (repo root) | `npx tsc --noEmit` at repo root | PASS (exit 0) |
+| Production build | `cd app && npm run build` | PASS (tsc + vite, exit 0) with the expected `demo-accounts.json excluded from dist` warning; chunk summary below |
+| Dash sweep | grep for em dash, en dash, and `--` over README.md and the Phase 6 files (provenance/, tickets/, raceSource.ts, vite.config.ts, the vite exclusion test) | PASS: no prose dashes; every `--` hit is a CLI flag (`--reset`, `--manifest-path`, `--outDir`, `--topup`) or a markdown table rule |
+| Rust suites | not rerun | program source untouched this phase; Phase 2 roster of 32 stands |
+
+### Security Low fix: vite exclusion test no longer touches the real dist (app/src/__tests__/viteExcludeDemoAccounts.test.ts)
+
+The Phase 6 security review (docs/reviews.md) flagged that the default-outDir cases planted and removed `dist/demo-accounts.json` inside the real app/dist tree, so a vitest run overlapping a real vite build could delete the build's freshly copied key file mid-build. Fixed this round:
+
+- Both default-outDir cases (`removes a planted dist/demo-accounts.json...` and `still emits the exclusion warning when the file is absent`) now create a fresh mkdtemp root with a `dist` stand-in directory seeded with `index.html` and `assets/app.js` siblings, and point the plugin at it through the same `configResolved` outDir seam the custom-outDir case already used (`{root: tmpRoot, build: {outDir: "dist"}}`).
+- The custom-outDir case's default-dist decoy now plants `tmpRoot/dist/demo-accounts.json` under the same temp root instead of the real `app/dist/demo-accounts.json`; its assertions are unchanged in meaning (custom outDir file removed, custom sibling survives, default-dist file survives).
+- Assertions kept equivalent: removal happens, siblings survive byte for byte, both warn strings still fire, and the absent-file case still warns exactly once. Temp roots are removed with `rmSync(..., {recursive, force})` in each case's `finally`; `afterEach` still resets the shared plugin instance to the default outDir and restores spies. The real `app/dist` path is no longer referenced by any test (the `distDir`/`plantedPath` constants and the backup/restore logic were removed with it).
+- Suite result: the file holds 4 tests (unchanged count), all pass; full suite 338 tests in 26 files.
+
+### Offline mode coverage (app/src/lib/__tests__/raceSource.test.ts)
+
+Pre-existing coverage ran only the `honest` spec through `createRaceSource({mode: "offline"})` (full run with `chain_ok: true`, plus the live-seam throw guards); all five specs were covered only at the `MockProgramClient` level (`mockClient.test.ts` `it.each(SCENARIOS)`). This round added a permanent `it.each(SCENARIOS)` block in the offline describe: each of the five specs runs through `createRaceSource({mode: "offline"})` and must return `chain_ok: true` with no error, exercising the offline source dispatch, the fresh mock client, and the offline anchor verifier together. Result: 5 new tests, all pass; the offline spot-run claim is now pinned in the suite rather than resting on a one-off tsx smoke.
+
+### Final Phase 6 roster (supersedes the 331 static count in the Phase 6 code review)
+
+- Vitest: 338 tests in 26 files. Composition: 333 passing tests after the ATOMIC_REVERTED fix (the Phase 6 code review's static count of 331 plus the fix round's delta), plus 5 offline scenario tests added in this round. The vite test fix changed assertions but not test counts.
+- Rust: 32 (27 LiteSVM integration plus 5 schema units), unchanged and not rerun this phase.
+- Repository total: 370 tests, all passing (Vitest 338 re-executed this round; Rust roster cited from Phase 2).
+
+### Build chunk summary (Phase 6 lazy loading)
+
+| Asset | Size | Gzip |
+|-------|------|------|
+| `dist/index.html` | 0.92 kB | 0.48 kB |
+| `index-DJlvEoef.css` | 20.55 kB | 3.80 kB |
+| `index-DJlvEoef.js` (entry, static: RacePanel + wallet) | 782.74 kB | 229.14 kB |
+| `LearnPanel` lazy chunk (JS) | 28.21 kB | 10.00 kB |
+| `ProvenancePanel` lazy chunk (JS) | 19.41 kB | 5.86 kB |
+| `TicketsPanel` lazy chunk (JS) | 14.37 kB | 4.62 kB |
+| `CopyButton` lazy chunk (JS) | 0.81 kB | 0.45 kB |
+| `LearnPanel` / `TicketsPanel` / `ProvenancePanel` CSS | 9.41 / 9.67 / 11.36 kB | 1.77 / 1.84 / 2.09 kB |
+
+The three panels are code-split as designed; the entry chunk carries the anchor and wallet dependencies and still triggers vite's 500 kB advisory warning (pre-existing, recorded in the Phase 5 entry). The build prints the `demo-accounts.json excluded from dist` guard warning and `ls app/dist` after the build shows `assets` and `index.html` only.
+
+### Findings
+
+- No failure this round: all commands passed, and both test edits (the mkdtemp isolation fix and the offline `it.each`) passed on the first run after the edits.
+- The Phase 6 code review's Low (ATOMIC_REVERTED display in laneLifecycle) was resolved by the fix round before this run (the 333 baseline includes it); not re-tested separately here because the ticketView end-state pins cover all five scenario terminals.
+
+### How to run
+
+```bash
+cd app && npm test          # 338 tests, 26 files
+cd app && npx tsc --noEmit  # strict type check
+cd app && npm run build     # tsc + vite; prints the demo-accounts exclusion warning
+npx tsc --noEmit            # repo root, covers scripts/
+```
+
+### Closing status
+
+All 6 phases are code-complete pending final commit.

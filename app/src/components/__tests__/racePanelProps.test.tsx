@@ -98,3 +98,44 @@ describe("RacePanel props contract", () => {
         expect(markup).toContain("picker-card-selected");
     });
 });
+
+describe("RacePanel mode switch", () => {
+    it("renders the live switch, devnet badge, and devnet evidence with no note", () => {
+        const markup = render({
+            source: "live",
+            chainStatus: "VALID",
+            mode: "live",
+            onModeChange: () => {},
+        });
+
+        expect(markup).toContain('aria-label="Settlement source"');
+        expect(markup).toContain('aria-pressed="true"');
+        expect(markup).toContain("Live devnet");
+        expect(markup).toContain("Offline demo");
+        expect(markup).toContain("Devnet live");
+        expect(markup).toContain("chain valid (devnet)");
+        expect(markup).not.toContain('class="race-mode-note"');
+    });
+
+    it("renders the offline badge, mock evidence, and the tradeoff note", () => {
+        const markup = render({
+            source: "live",
+            chainStatus: "VALID",
+            mode: "offline",
+            onModeChange: () => {},
+        });
+
+        expect(markup).toContain("mode-badge-offline");
+        expect(markup).toContain("chain valid (mock)");
+        expect(markup).toContain('class="race-mode-note"');
+        expect(markup).toContain("in-memory ledger");
+        expect(markup).toContain("no transactions");
+    });
+
+    it("hides the switch when no handler is supplied, keeping the badge", () => {
+        const markup = render({ source: "live" });
+
+        expect(markup).not.toContain('aria-label="Settlement source"');
+        expect(markup).toContain("Devnet live");
+    });
+});

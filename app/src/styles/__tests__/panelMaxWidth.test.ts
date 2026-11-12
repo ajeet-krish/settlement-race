@@ -2,14 +2,15 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 /**
- * Guards the panel width override. shell.css's .panel cap reads a custom
- * property, and .panel-race and .panel-learn each set that property on
- * the element itself, so those panels may be wider than 44rem no matter
+ * Guards the panel width override for every widened panel. shell.css's
+ * .panel cap reads a custom property, and .panel-race, .panel-learn,
+ * .panel-provenance, and .panel-tickets each set that property on the
+ * element itself, so those panels may be wider than 44rem no matter
  * which stylesheet is imported first. A literal competing max-width
  * declaration would depend on import order and is what this test exists
  * to catch.
  */
-describe("panel max width", () => {
+describe("widened panel max width", () => {
     const shellCss = readFileSync(
         new URL("../shell.css", import.meta.url),
         "utf8",
@@ -20,6 +21,14 @@ describe("panel max width", () => {
     );
     const learnCss = readFileSync(
         new URL("../learn.css", import.meta.url),
+        "utf8",
+    );
+    const provenanceCss = readFileSync(
+        new URL("../provenance.css", import.meta.url),
+        "utf8",
+    );
+    const ticketsCss = readFileSync(
+        new URL("../tickets.css", import.meta.url),
         "utf8",
     );
 
@@ -45,15 +54,34 @@ describe("panel max width", () => {
         expect(modifier?.[0]).not.toContain("max-width");
     });
 
-    it("puts both classes on the same element for the race and learn panels", () => {
+    it("sets the override on the provenance modifier, not a competing declaration", () => {
+        const modifier = /\.panel-provenance\s*\{[^}]*\}/.exec(provenanceCss);
+        expect(modifier).not.toBeNull();
+        expect(modifier?.[0]).toContain("--panel-max: 72rem");
+        // Same import order hazard as the race modifier.
+        expect(modifier?.[0]).not.toContain("max-width");
+    });
+
+    it("sets the override on the tickets modifier, not a competing declaration", () => {
+        const modifier = /\.panel-tickets\s*\{[^}]*\}/.exec(ticketsCss);
+        expect(modifier).not.toBeNull();
+        expect(modifier?.[0]).toContain("--panel-max: 64rem");
+        // Same import order hazard as the race modifier.
+        expect(modifier?.[0]).not.toContain("max-width");
+    });
+
+    it("puts both classes on the same element for every widened panel (race, learn, provenance, tickets)", () => {
         const appTsx = readFileSync(
             new URL("../../App.tsx", import.meta.url),
             "utf8",
         );
         // The custom property only helps because the element carrying
-        // .panel-race or .panel-learn also carries .panel, which reads it.
+        // .panel-race, .panel-learn, .panel-provenance, or
+        // .panel-tickets also carries .panel, which reads it.
         expect(appTsx).toContain('"panel panel-race"');
         expect(appTsx).toContain('"panel panel-learn"');
+        expect(appTsx).toContain('"panel panel-provenance"');
+        expect(appTsx).toContain('"panel panel-tickets"');
         expect(appTsx).toContain(': "panel"}');
     });
 });

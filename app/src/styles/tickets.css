@@ -1,0 +1,618 @@
+/*
+ * Tickets view: the ticket slip, the lifecycle rail, and the schema
+ * reference. Single class selectors only, matching shell.css,
+ * race.css, and provenance.css so layers never fight over
+ * specificity. Every colour is a theme token or a color mix of one:
+ * amber marks the open PAYING exposure phase, teal a settled
+ * terminal, clay a defaulted or failed terminal, steel the chrome.
+ * Mono carries every id, hash, amount, and state chip; the rail is
+ * static markup, so reduced motion needs nothing beyond theme.css's
+ * global rule.
+ */
+
+/* The slip and the rail want more room than the 44rem default, so
+   this modifier sets the custom property shell.css's .panel cap
+   reads through var(--panel-max). It travels on the element itself,
+   so load order cannot matter (same idiom as .panel-provenance). */
+.panel-tickets {
+    --panel-max: 64rem;
+}
+
+.tkt {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+}
+
+.tkt-head {
+    align-items: flex-start;
+    display: flex;
+    gap: var(--space-4);
+    justify-content: space-between;
+}
+
+.tkt-lede {
+    color: var(--text-muted);
+    font-size: var(--text-lg);
+    margin: var(--space-1) 0 0;
+    max-width: 46rem;
+}
+
+/* Empty state: an amber dashed slip that invites a run instead of
+   dead ending, the same idiom as the provenance empty state. */
+.tkt-empty {
+    border: 1px dashed color-mix(in srgb, var(--exposure-amber) 60%, transparent);
+    border-radius: 2px;
+    padding: var(--space-4) var(--space-5);
+}
+
+.tkt-empty-title {
+    color: var(--exposure-amber);
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    margin: 0 0 var(--space-2);
+}
+
+.tkt-empty-body {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    margin: 0;
+    max-width: 40rem;
+}
+
+/* Console card: the same raised petrol plate every panel block sits
+   on, under a mono eyebrow and a condensed title. */
+.tkt-card {
+    background-color: color-mix(in srgb, var(--steel-rule) 16%, var(--settle-ground));
+    border: 1px solid var(--steel-rule);
+    border-radius: 2px;
+    padding: var(--space-4) var(--space-5);
+}
+
+.tkt-card-head {
+    align-items: flex-start;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3) var(--space-5);
+    justify-content: space-between;
+    margin-bottom: var(--space-4);
+}
+
+.tkt-eyebrow {
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    margin: 0 0 var(--space-1);
+    text-transform: uppercase;
+}
+
+.tkt-card-title {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    margin: 0;
+}
+
+/* Supporting line beside a card title: quiet, capped so the head
+   keeps two readable columns until the stack breakpoint. */
+.tkt-rail-lede {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    margin: 0;
+    max-width: 34rem;
+}
+
+/* CURRENT lifecycle chip: the state word is always spelled out, so
+   colour never carries the meaning alone. */
+.tkt-life {
+    border: 1px solid;
+    border-radius: 2px;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    margin: 0;
+    padding: var(--space-1) var(--space-3);
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.tkt-life-neutral {
+    border-color: color-mix(in srgb, var(--advice-bone) 45%, transparent);
+    color: var(--advice-bone);
+}
+
+.tkt-life-paying {
+    border-color: color-mix(in srgb, var(--exposure-amber) 60%, transparent);
+    color: var(--exposure-amber);
+}
+
+.tkt-life-settled {
+    border-color: color-mix(in srgb, var(--finality-teal) 60%, transparent);
+    color: var(--finality-teal);
+}
+
+.tkt-life-lost {
+    border-color: color-mix(in srgb, var(--default-clay) 60%, transparent);
+    color: var(--default-clay);
+}
+
+/* Identity fields: a definition grid of stacked mono cells, one per
+   agreement field of the slip. */
+.tkt-grid {
+    display: grid;
+    gap: var(--space-3) var(--space-5);
+    grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+    margin: 0 0 var(--space-4);
+}
+
+.tkt-field dt {
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.tkt-field dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.tkt-mono {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    letter-spacing: 0.03em;
+}
+
+.tkt-sub {
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    font-weight: 400;
+    letter-spacing: 0;
+}
+
+/* Notionals: two big mono numbers between hairline rules, with the
+   raw integer cents printed underneath so the string form stays
+   visible next to the formatted display form. */
+.tkt-money {
+    border-bottom: 1px solid var(--steel-rule);
+    border-top: 1px solid var(--steel-rule);
+    display: grid;
+    gap: var(--space-4);
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    margin-bottom: var(--space-4);
+    padding: var(--space-4) 0;
+}
+
+.tkt-money-label {
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: 0.06em;
+    margin: 0;
+    text-transform: uppercase;
+}
+
+.tkt-money-value {
+    font-family: var(--font-mono);
+    font-size: var(--text-2xl);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.25;
+    margin: var(--space-1) 0;
+}
+
+.tkt-money-cents {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    margin: 0;
+}
+
+/* Parties: one row per side, desk chip plus truncated wallet with a
+   copy control for the full base58 value. */
+.tkt-party-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.tkt-party {
+    align-items: center;
+    background-color: color-mix(in srgb, var(--steel-rule) 10%, var(--settle-ground));
+    border: 1px solid color-mix(in srgb, var(--steel-rule) 70%, transparent);
+    border-radius: 2px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-3);
+    padding: var(--space-2) var(--space-3);
+}
+
+.tkt-party-role {
+    font-family: var(--font-display);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    min-width: 4.5rem;
+}
+
+.tkt-party-desk {
+    border: 1px solid var(--steel-rule);
+    border-radius: 2px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: 0.05em;
+    padding: 0 6px;
+    text-transform: uppercase;
+}
+
+.tkt-party-wallet {
+    color: var(--advice-bone);
+    flex: 1 1 12rem;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    overflow-wrap: anywhere;
+}
+
+/* Hash block: the commitment line and its verification verdict,
+   teal for a match, clay for a mismatch, muted when nothing to
+   compare against. */
+.tkt-hash-block {
+    border-top: 1px solid var(--steel-rule);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+    padding-top: var(--space-3);
+}
+
+.tkt-hash-row {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-3);
+}
+
+.tkt-hash-label {
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: 0.08em;
+    margin: 0;
+    text-transform: uppercase;
+}
+
+.tkt-hash {
+    color: var(--advice-bone);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    letter-spacing: 0.03em;
+    overflow-wrap: anywhere;
+}
+
+.tkt-check {
+    font-size: var(--text-xs);
+    margin: 0;
+    max-width: 54rem;
+}
+
+.tkt-check-match {
+    color: var(--finality-teal);
+}
+
+.tkt-check-mismatch {
+    color: var(--default-clay);
+}
+
+.tkt-check-absent {
+    color: var(--text-muted);
+}
+
+/* Lifecycle rail: the signature element. Four stations in order,
+   hairline connectors that light up as steps are reached, and one
+   current station wearing its tone. Static, no animation. */
+.tkt-rail {
+    display: grid;
+    gap: var(--space-5);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.tkt-step {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    min-width: 0;
+    position: relative;
+}
+
+/* Connector out of this station: steel until the station is
+   reached, bone once traversed, amber while the PAYING exposure
+   segment ahead of the current station is still open. */
+.tkt-step::after {
+    background-color: var(--steel-rule);
+    content: "";
+    height: 2px;
+    left: 17px;
+    position: absolute;
+    right: calc(-1 * var(--space-5));
+    top: 6px;
+}
+
+.tkt-step-done::after {
+    background-color: color-mix(in srgb, var(--advice-bone) 55%, transparent);
+}
+
+.tkt-step-current.tkt-tone-amber::after {
+    background-color: color-mix(in srgb, var(--exposure-amber) 75%, transparent);
+}
+
+.tkt-step:last-child::after {
+    display: none;
+}
+
+.tkt-step-top {
+    align-items: center;
+    display: flex;
+    gap: var(--space-2);
+    height: 14px;
+}
+
+.tkt-step-node {
+    background-color: transparent;
+    border: 1px solid var(--steel-rule);
+    box-sizing: border-box;
+    flex: none;
+    height: 12px;
+    width: 12px;
+}
+
+.tkt-step-done .tkt-step-node {
+    background-color: color-mix(in srgb, var(--advice-bone) 75%, transparent);
+    border-color: var(--advice-bone);
+}
+
+.tkt-step-current.tkt-tone-neutral .tkt-step-node {
+    background-color: var(--advice-bone);
+    border-color: var(--advice-bone);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--advice-bone) 22%, transparent);
+}
+
+.tkt-step-current.tkt-tone-amber .tkt-step-node {
+    background-color: var(--exposure-amber);
+    border-color: var(--exposure-amber);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--exposure-amber) 25%, transparent);
+}
+
+.tkt-step-current.tkt-tone-teal .tkt-step-node {
+    background-color: var(--finality-teal);
+    border-color: var(--finality-teal);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--finality-teal) 25%, transparent);
+}
+
+.tkt-step-current.tkt-tone-clay .tkt-step-node {
+    background-color: var(--default-clay);
+    border-color: var(--default-clay);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--default-clay) 25%, transparent);
+}
+
+.tkt-step-num {
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: 0.08em;
+    line-height: 1;
+}
+
+.tkt-step-label {
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-size: var(--text-base);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.tkt-step-done .tkt-step-label {
+    color: var(--text-muted);
+}
+
+.tkt-step-current.tkt-tone-neutral .tkt-step-label {
+    color: var(--advice-bone);
+}
+
+.tkt-step-current.tkt-tone-amber .tkt-step-label {
+    color: var(--exposure-amber);
+}
+
+.tkt-step-current.tkt-tone-teal .tkt-step-label {
+    color: var(--finality-teal);
+}
+
+.tkt-step-current.tkt-tone-clay .tkt-step-label {
+    color: var(--default-clay);
+}
+
+.tkt-step-rule {
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    line-height: 1.5;
+}
+
+.tkt-step-cause {
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+/* Lane chips: both paths' states spelled out under the rail, amber
+   over teal, matching the shell's lane keyline. */
+.tkt-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+}
+
+.tkt-chip {
+    border: 1px solid;
+    border-radius: 2px;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: 0.05em;
+    margin: 0;
+    padding: var(--space-1) var(--space-2);
+    text-transform: uppercase;
+}
+
+.tkt-chip-sequential {
+    border-color: color-mix(in srgb, var(--exposure-amber) 55%, transparent);
+    color: var(--exposure-amber);
+}
+
+.tkt-chip-atomic {
+    border-color: color-mix(in srgb, var(--finality-teal) 55%, transparent);
+    color: var(--finality-teal);
+}
+
+/* Schema reference: a native details element, so the toggle is the
+   browser's own keyboard operable disclosure. */
+.tkt-schema-summary {
+    cursor: pointer;
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    min-height: 44px;
+    padding: var(--space-2) 0;
+}
+
+.tkt-schema[open] .tkt-schema-summary {
+    margin-bottom: var(--space-3);
+}
+
+.tkt-schema-note {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    margin: 0 0 var(--space-3);
+    max-width: 54rem;
+}
+
+/* Field table: mono for field and type, body for the meaning, wrapped
+   in a labelled focusable region so narrow screens scroll it with the
+   keyboard. */
+.tkt-table-wrap {
+    border: 1px solid var(--steel-rule);
+    border-radius: 2px;
+    overflow-x: auto;
+}
+
+.tkt-table {
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+    width: 100%;
+}
+
+.tkt-table th {
+    background-color: var(--settle-ground);
+    border-bottom: 1px solid var(--steel-rule);
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    padding: var(--space-2) var(--space-3);
+    text-align: left;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.tkt-table td {
+    border-bottom: 1px solid color-mix(in srgb, var(--steel-rule) 60%, transparent);
+    padding: var(--space-2) var(--space-3);
+    vertical-align: top;
+}
+
+.tkt-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.tkt-table-field {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.tkt-table-type {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+}
+
+/* Shared copy control from provenance, sized up for touch inside
+   these cards without touching the provenance styles themselves. */
+.tkt-card .prov-copy {
+    min-height: 32px;
+}
+
+/* Screen reader only text: the full wallet and hash behind the
+   shortened forms, and the step progress word on the rail. */
+.tkt-visually-hidden {
+    border: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+}
+
+/* Stacks below 48rem: the rail runs vertically with its connector
+   turning down the left edge, heads and card heads go single column,
+   and the field grid falls back to whole cells. */
+@media (max-width: 48rem) {
+    .tkt-card {
+        padding: var(--space-4);
+    }
+
+    .tkt-card-head {
+        flex-direction: column;
+    }
+
+    .tkt-rail {
+        gap: var(--space-4);
+        grid-template-columns: 1fr;
+    }
+
+    .tkt-step::after {
+        bottom: calc(-1 * var(--space-4));
+        height: auto;
+        left: 5px;
+        right: auto;
+        top: 14px;
+        width: 2px;
+    }
+
+    .tkt-money-value {
+        font-size: var(--text-xl);
+    }
+}
