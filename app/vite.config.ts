@@ -57,7 +57,15 @@ export default defineConfig({
     // origin), so CORS is unnecessary. Vite's default allows any origin,
     // which would let any page open in a browser on this machine read the
     // devnet demo keys cross-origin while npm run dev runs.
+    //
+    // A distinctive port with strictPort so the server either starts at a
+    // known URL or fails loudly, never silently moves: Vite would otherwise
+    // shift to 5174, 5175, ... when 5199 is taken, and the browser tab for
+    // the old URL then shows whatever else listens there (a blank page from
+    // another app).
     server: {
+        port: 5199,
+        strictPort: true,
         cors: false,
     },
     test: {

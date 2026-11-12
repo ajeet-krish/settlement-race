@@ -66,7 +66,9 @@ npx tsx scripts/setup-devnet.ts
 cd app && npm run dev
 ```
 
-Open http://localhost:5173. The app fetches the demo accounts at startup (no browser wallet extension required: party A, party B, and the driver come from that file) and the engine source connects to devnet. While it loads, Run is disabled and the slip explains why; once connected, pick a scenario in the picker (Honest both sides, Default after leg 1, Late payment, Atomic revert, Partial payment) and press Run. Each run streams both lanes, then the chain pill reports the local verification result: VALID, BROKEN, or PENDING.
+Open http://localhost:5199. The app fetches the demo accounts at startup (no browser wallet extension required: party A, party B, and the driver come from that file) and the engine source connects to devnet. While it loads, Run is disabled and the slip explains why; once connected, pick a scenario in the picker (Honest both sides, Default after leg 1, Late payment, Atomic revert, Partial payment) and press Run. Each run streams both lanes, then the chain pill reports the local verification result: VALID, BROKEN, or PENDING.
+
+If port 5199 is already in use, the server exits with an error instead of moving to another port (`strictPort` in `app/vite.config.ts`), so the URL above is either correct or nothing is served. If you override the port on the command line, the terminal prints the URL the server actually uses.
 
 ### (c) Tests
 
