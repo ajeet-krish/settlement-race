@@ -40,8 +40,8 @@ cd app && npm run lint  # Lint frontend (when configured)
 | 2 | Anchor program and tests | Complete |
 | 3 | Provenance module | Complete |
 | 4 | Race UI | Complete |
-| 5 | Educational layer | In Progress |
-| 6 | Offline mode and polish | |
+| 5 | Educational layer | Complete |
+| 6 | Offline mode and polish | In Progress |
 
 ## Deep Docs
 

@@ -71,7 +71,7 @@ Phase 2 implementation notes: `settle_atomic` checks the live vault token balanc
 | programs/settlement-race/tests/settlement_race.rs | LiteSVM integration suite run by anchor test | new (phase 2) |
 | app/package.json | dev, build, test, lint scripts | new |
 | app/vite.config.ts, app/tsconfig.json, app/index.html | Vite + React + strict TS scaffold | new |
-| app/src/main.tsx, app/src/App.tsx | Bootstrap and routes (race, tickets, payments, verify, learn) | new |
+| app/src/main.tsx, app/src/App.tsx | Bootstrap and routes (tabs: race, tickets, provenance, learn) | new |
 | app/src/lib/money.ts | bigint cents, checked ops, formatters | new (phase 1) |
 | app/src/lib/ticket.ts | TradeTicket build, validate, canonical JSON, hash | new (phase 1) |
 | app/src/lib/provenance.ts | ProvenanceChain append, verify, head | new (phase 1 types, phase 3 impl) |
@@ -88,10 +88,17 @@ Phase 2 implementation notes: `settle_atomic` checks the live vault token balanc
 | app/src/engine/bot.ts | Scripted counterparty behaviors | new (phase 4) |
 | app/src/engine/scenarios.ts | Five scenario specs | new (phase 1 data, phase 4 logic) |
 | app/src/components/ | WalletBar, TicketCard, RaceTrack, LaneView, BalancePanel, TimelineControl, EventLog, ScenarioPicker, PaymentsComparison, VerifyTool | new (phases 4 to 6) |
+| app/src/components/learn/learnContent.ts | Learn view copy as pure data: hook, sections, figures, citations | new (phase 5) |
+| app/src/components/learn/LearnPanel.tsx | Learn view composition: thesis, anchor nav, narrative sections | new (phase 5) |
+| app/src/components/learn/ClsLimitsBox.tsx | Honesty box: what CLS provides that this toy does not | new (phase 5) |
+| app/src/components/learn/ComparisonTable.tsx | Three rails by six dimensions comparison table | new (phase 5) |
+| app/src/components/learn/Citations.tsx | Inline [n] citation rendering and numbered sources list | new (phase 5) |
+| app/src/styles/learn.css | Learn view styles including the amber risk hatch | new (phase 5) |
 | app/src/fixtures/ | Committed offline demo fixtures | new (phase 6) |
 | scripts/setup-devnet.ts | USD/CAD mints (2 decimals), airdrops, ATAs | new (phase 1) |
 | scripts/make-fixtures.ts | Fixture generator | new (phase 6) |
 | docs/architecture.md, docs/decisions.md | This snapshot and decision history | new (phase 1) |
+| README.md | Top level overview: hook, quick start, demo script, evidence pointers | new |
 
 ## PDA Derivations
 ```text

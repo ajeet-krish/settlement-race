@@ -3,25 +3,22 @@ import AppShell from "./components/AppShell";
 import { TABS, type TabId } from "./components/tabs";
 import "./styles/theme.css";
 import "./styles/shell.css";
-// Imported after the stylesheets so race.css lands later in the cascade.
+// Imported after the stylesheets so component css lands later in the cascade.
 import RacePanel from "./components/RacePanel";
+import LearnPanel from "./components/learn/LearnPanel";
 import type { ChainStatus } from "./components/race/raceTypes";
 import type { RaceEvent } from "./engine/scenarioEngine";
 import { getScenario, type ScenarioSpec } from "./engine/scenarios";
 import { createRaceSource, type RaceSourceState } from "./lib/raceSource";
 import type { ScenarioKind } from "./lib/ticket";
 
-/** Placeholder copy for each tab until its slice lands. */
+/** Placeholder copy for the tabs whose slices have not landed yet. */
 interface PanelCopy {
     heading: string;
     body: string;
 }
 
-const PANELS: Record<TabId, PanelCopy> = {
-    race: {
-        heading: "Race",
-        body: "The side-by-side race view: sequential pay-first against atomic delivery versus payment, replaying five scenarios against one clock.",
-    },
+const PANELS: Record<Exclude<TabId, "race" | "learn">, PanelCopy> = {
     tickets: {
         heading: "Tickets",
         body: "Trade ticket lifecycle viewer: follow each ticket from NEW to its terminal state, with every money amount in integer cents.",
@@ -30,20 +27,16 @@ const PANELS: Record<TabId, PanelCopy> = {
         heading: "Provenance",
         body: "Hash-chained provenance with a verify step that checks every link against the chain head.",
     },
-    learn: {
-        heading: "Learn",
-        body: "Why CLS exists: the principal risk window that delivery versus payment was built to close.",
-    },
 };
 
 /**
  * Shell plus the wired race view: tab state, placeholder panels for
- * tickets, provenance, and the educational layer, and a RacePanel fed
- * from createRaceSource. The source loads once on mount and reports one
- * of four states (loading, missing accounts with guidance, ready, error);
- * a run accumulates engine events, flips the chain pill from the
- * verification result, and starts fresh on every press with a new
- * engine instance underneath.
+ * tickets and provenance, the mounted educational layer, and a
+ * RacePanel fed from createRaceSource. The source loads once on mount
+ * and reports one of four states (loading, missing accounts with
+ * guidance, ready, error); a run accumulates engine events, flips the
+ * chain pill from the verification result, and starts fresh on every
+ * press with a new engine instance underneath.
  */
 export default function App() {
     const [active, setActive] = useState<TabId>("race");
@@ -129,12 +122,11 @@ export default function App() {
     return (
         <AppShell active={active} onTabChange={setActive}>
             {TABS.map((id) => {
-                const copy = PANELS[id];
                 const selected = id === active;
                 return (
                     <section
                         key={id}
-                        className={id === "race" ? "panel panel-race" : "panel"}
+                        className={id === "race" ? "panel panel-race" : id === "learn" ? "panel panel-learn" : "panel"}
                         role="tabpanel"
                         id={`panel-${id}`}
                         aria-labelledby={`tab-${id}`}
@@ -155,11 +147,15 @@ export default function App() {
                                 notice={notice}
                                 running={running}
                             />
+                        ) : id === "learn" ? (
+                            <LearnPanel />
                         ) : (
                             <>
                                 <p className="panel-status">Next slice</p>
-                                <h2 className="panel-heading">{copy.heading}</h2>
-                                <p className="panel-body">{copy.body}</p>
+                                <h2 className="panel-heading">
+                                    {PANELS[id].heading}
+                                </h2>
+                                <p className="panel-body">{PANELS[id].body}</p>
                             </>
                         )}
                     </section>

@@ -479,3 +479,70 @@ npx tsx scripts/setup-devnet.ts   # devnet setup (idempotent; skips funded walle
 - Build plugins that guard a fixed path are still unit testable through the exported config object: find the plugin by `name` in `config.plugins`, drive its hook directly, plant exactly the one guarded path, and assert the rest of the output directory is untouched.
 - Server rendering with `renderToStaticMarkup` pins prop to markup contracts in a node test environment without adding a DOM library; effects do not run, so keep such tests to static mapping and leave interaction to pure logic suites.
 - Scripts that run `main()` at import time are untestable by design; the honest options are a manual run (as done here) or an entry guard refactor, and docs/tests.md should record which one was chosen.
+
+## 2026-11-12 - Phase 5: Tester round (suite verification, panelMaxWidth pin extension, citation spot check)
+
+Scope: independent execution of the Phase 5 verification commands, closure of the Low test pin gap routed by the Phase 5 slice 1 code review in docs/reviews.md, and a factual spot check of the Mariana qualifier fix. Rust untouched this phase, so no cargo or anchor command was run; the Phase 2 roster of 32 Rust tests stands as recorded above. Screenshots are intentionally out of scope for this round: the user captures them manually per docs/screenshots/README.md, and no docs/screenshots content was reviewed or tested.
+
+Pre-run state check: `git status --porcelain` showed only the orchestrator's Phase 5 slice 1 changes (app/src/App.tsx, docs/architecture.md, docs/research.md, docs/reviews.md modified; README.md, app/src/components/learn/, app/src/styles/learn.css, docs/screenshots/ untracked) and no partial test edits from the previously interrupted tester session.
+
+### Suite results (all executed by the tester)
+
+| Suite | Command | Result |
+|-------|---------|--------|
+| Vitest (app) | `cd app && npm test` | PASS: 24 files, 268 tests in the pre-edit run, 269 after the pin extension below (all green in both runs) |
+| Type check (app) | `cd app && npx tsc --noEmit` | PASS (strict mode, exit 0; re-run after the test edit, still exit 0) |
+| Type check (repo root) | `npx tsc --noEmit` at repo root | PASS (exit 0) |
+| Production build | `cd app && npm run build` | PASS (tsc + vite, exit 0) with the expected `demo-accounts.json excluded from dist` warning; see the observation under Findings |
+| Rust suites | not rerun | program source untouched this phase; Phase 2 roster of 32 stands |
+
+### Routed gap status from docs/reviews.md Phase 5 slice 1
+
+| Routed item | Status |
+|-------------|--------|
+| Low: panelMaxWidth pins .panel-race but not .panel-learn; title "for the race panel only" stale | CLOSED by the pin extension below |
+| Low: Mariana claim dropped the "hypothetical" qualifier | FIXED by backend-dev before this round; verified by the spot check below |
+| Info: README cites 268 tests but tests.md has no Phase 5 run yet | CLOSED by this entry (roster reconciliation below) |
+| Info: architecture.md routes row lists stale tab names | documentation-owned; not testable here |
+| Info: README Phase 6 wording vs AGENTS.md status cell | documentation-owned; not testable here |
+| Info: docs/screenshots/README.md placeholder wording | documentation-owned; screenshots deferred to manual capture by design |
+| Security Low: Citations.tsx raw href scheme allowlist | deferred by the security review (static https data today); no test seam beyond the existing static URL assertions |
+
+### panelMaxWidth pin extension (app/src/styles/__tests__/panelMaxWidth.test.ts)
+
+- Added a `learnCss` read of `../learn.css` and a fourth test: the `.panel-learn` rule must set `--panel-max: 66rem` (learn.css:17) with no competing `max-width` inside the same rule block, mirroring the existing `.panel-race` 78rem pin.
+- Retitled the modifier test to "sets the override on the race modifier, not a competing declaration" and the pairing test from "for the race panel only" to "for the race and learn panels". The pairing test now also asserts `"panel panel-learn"` appears in App.tsx (App.tsx:129 pairs `panel` with `panel-learn` on the learn tab), alongside the untouched `'"panel panel-race"'` and `': "panel"}'` assertions.
+- The file docstring now describes both modifiers. All three pre-existing assertions were kept byte for byte and stay green.
+- Result: the file holds 4 tests (was 3); full suite 269 tests in 24 files, all pass.
+
+### Citation spot check (Phase 5 slice 1 code review factual flag)
+
+- Literal grep for `hypothetical wholesale CBDC setup aiming at` in `app/src/components/learn/learnContent.ts` matches exactly one line, learnContent.ts:224: "BIS Project Mariana concluded in 2024 after testing a hypothetical wholesale CBDC setup aiming at atomic PvP settlement on a public blockchain [37]...". Both the `hypothetical` qualifier and the `aiming at` hedge survive the copy fix.
+- Citation tokens `[37]` and `[38]` are intact in that same string; `[38]` carries the BIS 2024 survey 77 and 71 percent sentence. The review's factual spot-check holds after the fix.
+
+### Final Phase 5 roster (reconciles README's cited 268)
+
+- Vitest: 269 tests in 24 files. Composition: README.md:75's cited 268 (the Phase 4 final roster of 263 plus the 5 new learnPanel content tests) plus 1 test added in this round (the `.panel-learn` pin above). Both runs passed: 268 in 24 files before the edit, 269 in 24 files after.
+- README.md:75 now reads one test low against tests.md; the next documentation pass should bump the cited figure to 269. This round was test-only, so README was not edited (routed as an Info in the Phase 5 code review).
+- Rust: 32 (27 LiteSVM integration plus 5 schema units), unchanged and not rerun this phase.
+- Repository total: 301 tests, all passing (Vitest 269 re-executed this round; Rust roster cited from Phase 2).
+
+### Findings
+
+- No failure: every command passed on the first attempt, and no assertion needed correction during this round.
+- Observation (pre-existing, not a Phase 5 regression): `npm run build` prints two `rolldown:vite-resolve` notes about externalizing `fs` and `process` from `@anchor-lang/core/dist/browser/index.js`, plus a chunk-size warning for the 794.87 kB bundle. All are non-fatal and unrelated to the learn slice; the only documented guard warning remains the `demo-accounts.json excluded from dist` line.
+
+### How to run
+
+```bash
+cd app && npm test          # 269 tests, 24 files
+cd app && npx tsc --noEmit  # strict type check
+cd app && npm run build     # tsc + vite; prints the demo-accounts exclusion warning
+npx tsc --noEmit            # repo root, covers scripts/
+```
+
+### Recurring patterns for other agents (additions)
+
+- When a second panel modifier copies the `--panel-max` pattern, extend `panelMaxWidth.test.ts` in the same slice: read the new stylesheet, pin the exact rem value inside the modifier rule block, assert no `max-width` in that block, and assert the App.tsx class pairing string. Doing it in-slice avoids the follow-up routing this round closed.
+- Qualifier restorations in sourced copy (`hypothetical`, `aiming at`) are verifiable with a literal string grep against the research wording; record the exact matched line so a later rewrite cannot silently drop the hedge again.
+- README roster claims and the tests.md entry that records the run should land together; when they cannot, tests.md must state the arithmetic (cited figure plus this round's delta) so the reconciliation is explicit rather than a silent drift.
