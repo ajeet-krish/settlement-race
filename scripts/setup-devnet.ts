@@ -6,6 +6,12 @@
  * associated token accounts for both parties on both mints, mints the initial
  * play money balances, and writes every pubkey to scripts/devnet-accounts.json.
  *
+ * It also keeps a third demo keypair (the race driver) in the keypair store,
+ * tops the driver wallet up with SOL from the payer when it runs low, and
+ * writes the browser facing demo keypairs and mint addresses to
+ * app/public/demo-accounts.json (gitignored, mode 600, devnet secrets) so the
+ * React UI can load them without a wallet adapter.
+ *
  * Usage (from the repository root):
  *   npx tsx scripts/setup-devnet.ts           # create once, then top up
  *   npx tsx scripts/setup-devnet.ts --reset   # regenerate party keypairs
@@ -42,6 +48,7 @@
 import {
     chmodSync,
     existsSync,
+    mkdirSync,
     readFileSync,
     rmSync,
     writeFileSync,
@@ -68,8 +75,18 @@ import {
 } from "@solana/spl-token";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = dirname(SCRIPT_DIR);
 const ACCOUNTS_FILE = join(SCRIPT_DIR, "devnet-accounts.json");
 const KEYPAIRS_FILE = join(SCRIPT_DIR, "devnet-keypairs.json");
+/** Gitignored JSON the React UI fetches for the three demo keypairs. */
+const DEMO_ACCOUNTS_FILE = join(REPO_ROOT, "app", "public", "demo-accounts.json");
+const PROGRAM_SOURCE_FILE = join(
+    REPO_ROOT,
+    "programs",
+    "settlement-race",
+    "src",
+    "lib.rs",
+);
 const CLI_WALLET_FILE = join(homedir(), ".config", "solana", "id.json");
 
 const RPC_URL = process.env.SOLANA_RPC_URL ?? clusterApiUrl("devnet");
@@ -94,6 +111,14 @@ const PAYER_KEEP_SOL = 0.5;
 const FEE_BUFFER_LAMPORTS = 10_000_000; // 0.01 SOL
 /** Balance at or above this counts as a funded, usable party wallet. */
 const PARTY_MIN_LAMPORTS = Math.floor(0.1 * LAMPORTS_PER_SOL);
+/** The demo driver only signs race transactions, so it needs less SOL. */
+const DRIVER_MIN_LAMPORTS = Math.floor(0.05 * LAMPORTS_PER_SOL);
+/**
+ * After this run has transferred SOL to the driver once, only a balance at
+ * or above this counts as still topped up; anything lower means the wallet
+ * was drained again mid run and is rescued like a normal top up.
+ */
+const DRIVER_TOPPED_LAMPORTS = Math.floor(0.1 * LAMPORTS_PER_SOL);
 const AIRDROP_BACKOFF_MS = [2_000, 5_000, 10_000, 20_000];
 const AIRDROP_CONFIRM_TIMEOUT_MS = 20_000;
 
@@ -101,14 +126,59 @@ const AIRDROP_CONFIRM_TIMEOUT_MS = 20_000;
 let faucetClosed = false;
 
 /**
+ * Scenario catalogue notionals in integer cents, mirroring LEG1_USD_CENTS
+ * and LEG2_CAD_CENTS in app/src/engine/scenarios.ts (all five specs share
+ * them) and the demo ticket in docs/tradeops-schema.md.
+ */
+const SCENARIO_LEG1_USD_CENTS = 1_000_000n; // USD 10,000.00
+const SCENARIO_LEG2_CAD_CENTS = 1_350_000n; // CAD 13,500.00
+/** Full funding in basis points: 10000 bps equals 1.0 (fund_bps max). */
+const FULL_FUND_BPS = 10_000n;
+/** Largest fund_bps across the five specs (honest, default, late use 10000). */
+const MAX_FUND_BPS = 10_000n;
+/** The race UI funds both lanes (sequential and atomic) from one party pair. */
+const FUNDED_LANES = 2n;
+/** Headroom above the two-lane requirement: 1000 bps equals 10 percent. */
+const HEADROOM_BPS = 1_000n;
+
+/** Ceiling division so a target never rounds below the requirement. */
+function centsCeil(numerator: bigint, denominator: bigint): bigint {
+    return (numerator + denominator - 1n) / denominator;
+}
+
+/**
+ * Party A's USD target: two lanes of the largest USD leg requirement across
+ * the five specs (the USD leg is not bps scaled), plus 10 percent headroom.
+ * Integer math only: 1,000,000 x 2 x 11,000 / 10,000 = 2,200,000 cents.
+ */
+const PARTY_A_USD_TARGET_CENTS = centsCeil(
+    SCENARIO_LEG1_USD_CENTS * FUNDED_LANES * (FULL_FUND_BPS + HEADROOM_BPS),
+    FULL_FUND_BPS,
+);
+
+/**
+ * Party B's CAD target: two lanes of the largest CAD leg at the highest
+ * fund_bps (10000), plus 10 percent headroom. Integer math only:
+ * 1,350,000 x 2 x 10,000 / 10,000 x 11,000 / 10,000 = 2,970,000 cents.
+ */
+const PARTY_B_CAD_TARGET_CENTS = centsCeil(
+    SCENARIO_LEG2_CAD_CENTS *
+        FUNDED_LANES *
+        MAX_FUND_BPS *
+        (FULL_FUND_BPS + HEADROOM_BPS),
+    FULL_FUND_BPS * FULL_FUND_BPS,
+);
+
+/**
  * Initial balances in integer cents. With 2 decimals, one base unit equals
  * one cent, so cents are also the mint amount. Party A holds mostly USD,
  * party B holds mostly CAD, matching an FX trade where each side starts long
- * its own currency.
+ * its own currency. The USD and CAD sides cover both race lanes plus the
+ * headroom above; the small secondary balances are display only.
  */
 const INITIAL_BALANCES_CENTS = {
-    party_a: { usd: 1_000_000n, cad: 50_000n }, // 10,000.00 USD and 500.00 CAD
-    party_b: { usd: 50_000n, cad: 1_350_000n }, // 500.00 USD and 13,500.00 CAD
+    party_a: { usd: PARTY_A_USD_TARGET_CENTS, cad: 50_000n }, // 22,000.00 USD and 500.00 CAD
+    party_b: { usd: 50_000n, cad: PARTY_B_CAD_TARGET_CENTS }, // 500.00 USD and 29,700.00 CAD
 } as const;
 
 interface StoredKeypairs {
@@ -116,6 +186,7 @@ interface StoredKeypairs {
     authority: number[];
     party_a: number[];
     party_b: number[];
+    driver: number[];
 }
 
 interface PreviousAccounts {
@@ -142,6 +213,29 @@ interface DevnetAccounts {
     sol_funded: { party_a: boolean; party_b: boolean };
 }
 
+/** One entry of app/public/demo-accounts.json: secret and public key. */
+interface DemoAccountEntry {
+    secret: string;
+    pubkey: string;
+}
+
+/**
+ * app/public/demo-accounts.json: the browser facing subset of the devnet
+ * setup, three demo keypairs plus the mint addresses. It holds secrets (devnet
+ * play money only), so it is gitignored and written with mode 600.
+ */
+interface DemoAccountsFile {
+    version: 1;
+    cluster: "devnet";
+    program_id: string;
+    partyA: DemoAccountEntry;
+    partyB: DemoAccountEntry;
+    driver: DemoAccountEntry;
+    usd_mint: string;
+    cad_mint: string;
+    note: string;
+}
+
 function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => {
         setTimeout(resolve, ms);
@@ -161,6 +255,49 @@ function formatSol(lamports: number): string {
     const whole = Math.floor(lamports / 1_000_000_000);
     const remainder = lamports - whole * 1_000_000_000;
     return `${whole}.${String(remainder).padStart(9, "0")}`;
+}
+
+const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+/**
+ * Encode bytes as base58 (the Solana alphabet) with bigint math. The demo
+ * accounts file stores keypair secrets as base58 strings; `bs58` is not a
+ * dependency of this workspace, so the encoding lives here. Leading zero
+ * bytes become leading "1" characters, matching the usual base58 rules.
+ */
+function base58Encode(bytes: Uint8Array): string {
+    let value = 0n;
+    for (const byte of bytes) {
+        value = (value << 8n) | BigInt(byte);
+    }
+    let encoded = "";
+    while (value > 0n) {
+        encoded = `${BASE58_ALPHABET.charAt(Number(value % 58n))}${encoded}`;
+        value /= 58n;
+    }
+    for (const byte of bytes) {
+        if (byte !== 0) {
+            break;
+        }
+        encoded = `1${encoded}`;
+    }
+    return encoded;
+}
+
+/**
+ * Read the program id from declare_id! in the Anchor program source, the
+ * value `anchor keys sync` keeps aligned with Anchor.toml and the app's
+ * pda.ts PROGRAM_ID, so the demo accounts file always carries the id the
+ * frontend validates against.
+ */
+function readProgramId(): string {
+    const match = /declare_id!\s*\(\s*"([1-9A-HJ-NP-Za-km-z]+)"\s*\)/.exec(
+        readFileSync(PROGRAM_SOURCE_FILE, "utf8"),
+    );
+    if (match === null || match[1] === undefined) {
+        throw new Error(`Could not find declare_id!("...") in ${PROGRAM_SOURCE_FILE}`);
+    }
+    return match[1];
 }
 
 async function withTimeout<T>(
@@ -202,6 +339,7 @@ function loadOrCreateKeypairs(): {
     authority: Keypair;
     party_a: Keypair;
     party_b: Keypair;
+    driver: Keypair;
 } {
     if (existsSync(KEYPAIRS_FILE)) {
         chmodSync(KEYPAIRS_FILE, 0o600);
@@ -212,24 +350,47 @@ function loadOrCreateKeypairs(): {
             authority: Keypair.fromSecretKey(Uint8Array.from(stored.authority)),
             party_a: Keypair.fromSecretKey(Uint8Array.from(stored.party_a)),
             party_b: Keypair.fromSecretKey(Uint8Array.from(stored.party_b)),
+            driver: loadOrMigrateDriver(stored),
         };
     }
     const generated = {
         authority: Keypair.generate(),
         party_a: Keypair.generate(),
         party_b: Keypair.generate(),
+        driver: Keypair.generate(),
     };
     const stored: StoredKeypairs = {
         note: "Devnet play money only. Never use these keys on mainnet.",
         authority: Array.from(generated.authority.secretKey),
         party_a: Array.from(generated.party_a.secretKey),
         party_b: Array.from(generated.party_b.secretKey),
+        driver: Array.from(generated.driver.secretKey),
     };
     writeFileSync(KEYPAIRS_FILE, `${JSON.stringify(stored, null, 2)}\n`, {
         mode: 0o600,
     });
     console.log(`Wrote new keypairs to ${KEYPAIRS_FILE}`);
     return generated;
+}
+
+/**
+ * Read the demo driver keypair from the store, generating and persisting one
+ * when the file predates the driver field (files written before the demo
+ * accounts pipeline existed). The rewrite keeps mode 600, so the secrets never
+ * land with wider permissions.
+ */
+function loadOrMigrateDriver(stored: StoredKeypairs): Keypair {
+    const existing: number[] | undefined = stored.driver;
+    if (Array.isArray(existing)) {
+        return Keypair.fromSecretKey(Uint8Array.from(existing));
+    }
+    const driver = Keypair.generate();
+    stored.driver = Array.from(driver.secretKey);
+    writeFileSync(KEYPAIRS_FILE, `${JSON.stringify(stored, null, 2)}\n`, {
+        mode: 0o600,
+    });
+    console.log(`Added demo driver keypair to ${KEYPAIRS_FILE}`);
+    return driver;
 }
 
 function loadPreviousAccounts(): PreviousAccounts | null {
@@ -406,6 +567,62 @@ async function fundParties(
     return [funded[0] ?? false, funded[1] ?? false];
 }
 
+/**
+ * Set once fundDriver transfers SOL to the driver during this process run.
+ * It feeds the cumulative guard below: after one top up, repeat calls only
+ * transfer again when the wallet has dropped below DRIVER_TOPPED_LAMPORTS,
+ * so repeated calls in one run cannot farm the payer. No state file: the
+ * flag lives only for the lifetime of one script invocation, and each fresh
+ * rerun still gets exactly one rescue transfer for a drained driver.
+ */
+let driverToppedUpThisRun = false;
+
+/**
+ * Keep the demo driver wallet funded: skip when it already qualifies
+ * (idempotent on rerun), otherwise top up from the payer with
+ * transferFromPayer. That helper refuses transfers below its 0.25 SOL dust
+ * floor, so the request is that floor rather than the exact shortfall; any
+ * success therefore lands above the minimum. The skip threshold is
+ * DRIVER_MIN_LAMPORTS until this run has topped the driver up once, then
+ * DRIVER_TOPPED_LAMPORTS: a balance still at or above 0.1 SOL after a top up
+ * means no further transfer, while anything lower is a drain that gets
+ * rescued as before. Returns false when the payer could not spare enough,
+ * letting main() warn like it does for the parties.
+ */
+async function fundDriver(
+    connection: Connection,
+    payer: Keypair,
+    driver: PublicKey,
+): Promise<boolean> {
+    const existing = await connection.getBalance(driver, "confirmed");
+    const skipThreshold = driverToppedUpThisRun
+        ? DRIVER_TOPPED_LAMPORTS
+        : DRIVER_MIN_LAMPORTS;
+    if (existing >= skipThreshold) {
+        console.log(
+            `  demo driver ${driver.toBase58()} already holds ${formatSol(existing)} SOL`,
+        );
+        return true;
+    }
+    const payerBalance = await connection.getBalance(payer.publicKey, "confirmed");
+    const spare = Math.max(
+        0,
+        payerBalance -
+            Math.floor(PAYER_KEEP_SOL * LAMPORTS_PER_SOL) -
+            FEE_BUFFER_LAMPORTS,
+    );
+    const requested = Math.floor(MIN_AIRDROP_SOL * LAMPORTS_PER_SOL);
+    const funded = await transferFromPayer(connection, payer, driver, requested, spare);
+    if (funded) {
+        driverToppedUpThisRun = true;
+        const balance = await connection.getBalance(driver, "confirmed");
+        console.log(
+            `  demo driver ${driver.toBase58()} now holds ${formatSol(balance)} SOL`,
+        );
+    }
+    return funded;
+}
+
 async function resolveMint(
     connection: Connection,
     payer: Keypair,
@@ -495,6 +712,43 @@ async function assertDevnet(connection: Connection): Promise<void> {
     );
 }
 
+/**
+ * Write app/public/demo-accounts.json, the file the React UI fetches at
+ * startup to get the three demo keypairs (party A, party B, and the driver)
+ * and the mint addresses without a wallet adapter.
+ *
+ * The file holds secrets (devnet play money only), so it is created with mode
+ * 600, chmodded on every run, gitignored, and never logged beyond its path.
+ * program_id is read from declare_id! so it always matches the app.
+ */
+export function writeDemoAccounts(
+    keypairs: { party_a: Keypair; party_b: Keypair; driver: Keypair },
+    usdMint: PublicKey,
+    cadMint: PublicKey,
+): void {
+    const entry = (keypair: Keypair): DemoAccountEntry => ({
+        secret: base58Encode(keypair.secretKey),
+        pubkey: keypair.publicKey.toBase58(),
+    });
+    const demoAccounts: DemoAccountsFile = {
+        version: 1,
+        cluster: "devnet",
+        program_id: readProgramId(),
+        partyA: entry(keypairs.party_a),
+        partyB: entry(keypairs.party_b),
+        driver: entry(keypairs.driver),
+        usd_mint: usdMint.toBase58(),
+        cad_mint: cadMint.toBase58(),
+        note: "devnet play money only; gitignored; regenerate with npx tsx scripts/setup-devnet.ts",
+    };
+    mkdirSync(dirname(DEMO_ACCOUNTS_FILE), { recursive: true });
+    writeFileSync(DEMO_ACCOUNTS_FILE, `${JSON.stringify(demoAccounts, null, 2)}\n`, {
+        mode: 0o600,
+    });
+    chmodSync(DEMO_ACCOUNTS_FILE, 0o600);
+    console.log(`Wrote ${DEMO_ACCOUNTS_FILE}`);
+}
+
 async function main(): Promise<void> {
     const reset = process.argv.includes("--reset");
     if (reset) {
@@ -547,6 +801,13 @@ async function main(): Promise<void> {
         keypairs.party_a.publicKey,
         keypairs.party_b.publicKey,
     ]);
+
+    console.log("Funding demo driver wallet (payer transfer)");
+    const driverFunded = await fundDriver(
+        connection,
+        payer,
+        keypairs.driver.publicKey,
+    );
 
     const previous = loadPreviousAccounts();
     const usdMint = await resolveMint(
@@ -674,10 +935,12 @@ async function main(): Promise<void> {
     writeFileSync(ACCOUNTS_FILE, `${JSON.stringify(accounts, null, 2)}\n`);
     console.log(`Wrote ${ACCOUNTS_FILE}`);
 
-    if (!partyAFunded || !partyBFunded) {
+    writeDemoAccounts(keypairs, usdMint, cadMint);
+
+    if (!partyAFunded || !partyBFunded || !driverFunded) {
         process.exitCode = 1;
         console.error(
-            "Warning: at least one party wallet has no SOL. Token accounts and balances are ready, but on chain instructions signed by that party will fail until it receives SOL. Rerun this script later or fund the wallet manually.",
+            "Warning: at least one party or the demo driver wallet has no SOL. Token accounts and balances are ready, but on chain instructions signed by that wallet will fail until it receives SOL. Rerun this script later or fund the wallet manually.",
         );
     } else {
         console.log("Devnet setup complete.");

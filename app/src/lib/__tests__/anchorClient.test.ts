@@ -6,6 +6,7 @@ import type { AccountInfo, Connection } from "@solana/web3.js";
 import { AnchorClient, keypairWallet } from "../anchorClient";
 import { PROGRAM_ID } from "../pda";
 import { programErrorCode } from "../mockClient";
+import type { TxResult } from "../programClient";
 import idlJson from "../settlement_race.json";
 
 const TICKET_HASH = new Uint8Array(32).fill(7);
@@ -110,7 +111,7 @@ describe("AnchorClient: construction and account decoding", () => {
         expect(account.party_a).toBeInstanceOf(PublicKey);
     });
 
-    it("reports a missing account as a fetch error", async () => {
+    it("reports a missing account as a typed fetch error", async () => {
         const { client } = makeClient(connectionWithAccount(null));
         const [scenario] = PublicKey.findProgramAddressSync(
             [Buffer.from("scenario"), client.programAddress.toBytes()],
@@ -119,6 +120,8 @@ describe("AnchorClient: construction and account decoding", () => {
         const result = await client.fetchScenario(scenario);
         expect(result.ok).toBe(false);
         if (!result.ok) {
+            // Same shape the mock client returns for the same failure.
+            expect(result.error).toMatch(/^AccountNotFound: /);
             expect(result.error).toContain("does not exist");
         }
     });
@@ -229,6 +232,182 @@ describe("AnchorClient: typed error codes for non program failures", () => {
             // intact, never re-prefixed.
             expect(programErrorCode(result.error)).toBe("NotParty");
         }
+    });
+});
+
+describe("AnchorClient: polling confirmation over the blockhash strategy", () => {
+    it("confirms with the blockhash strategy when a websocket style confirm would reject", async () => {
+        const blockhash = Keypair.generate().publicKey.toBase58();
+        const signature = Keypair.generate().publicKey.toBase58();
+        const getLatestBlockhash = vi.fn(async (_commitment?: string) => ({
+            blockhash,
+            lastValidBlockHeight: 4_321,
+        }));
+        const sendRawTransaction = vi.fn(async (_raw: Buffer): Promise<string> => signature);
+        const confirmTransaction = vi.fn(
+            async (strategy: unknown, _commitment?: string) => {
+                // The websocket style confirm takes a bare signature string
+                // and is what rejected with 429 under devnet rate limiting.
+                if (typeof strategy === "string") {
+                    throw new Error("429 Too Many Requests: websocket subscription rejected");
+                }
+                return { context: { slot: 1 }, value: { err: null } };
+            },
+        );
+        const connection = {
+            getLatestBlockhash,
+            sendRawTransaction,
+            confirmTransaction,
+        } as unknown as Connection;
+
+        const { client, driver } = makeClient(connection);
+        const [scenario] = PublicKey.findProgramAddressSync(
+            [Buffer.from("scenario"), client.programAddress.toBytes()],
+            client.programAddress,
+        );
+
+        const result = await client.ack({ scenario, signer: driver.publicKey });
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) {
+            return;
+        }
+        expect(result.signature).toBe(signature);
+        // The blockhash is read before the send and anchors the strategy.
+        expect(getLatestBlockhash.mock.calls[0]?.[0]).toBe("confirmed");
+        expect(sendRawTransaction.mock.calls).toHaveLength(1);
+        expect(Buffer.isBuffer(sendRawTransaction.mock.calls[0]?.[0])).toBe(true);
+        expect(confirmTransaction.mock.calls).toHaveLength(1);
+        const [strategy, commitment] = confirmTransaction.mock.calls[0] ?? [];
+        expect(typeof strategy).toBe("object");
+        const polling = strategy as {
+            signature: string;
+            blockhash: string;
+            lastValidBlockHeight: number;
+        };
+        expect(polling.signature).toBe(signature);
+        expect(polling.blockhash).toBe(blockhash);
+        expect(polling.lastValidBlockHeight).toBe(4_321);
+        expect(commitment).toBe("confirmed");
+        // The mock really does reject the websocket form, so the green
+        // result above proves the polling strategy was the one used.
+        await expect(confirmTransaction(signature, "confirmed")).rejects.toThrow("429");
+    });
+
+    it("turns a persistent transport failure into a typed RpcError with no unhandled rejection", async () => {
+        const blockhash = Keypair.generate().publicKey.toBase58();
+        const getLatestBlockhash = vi.fn(async (_commitment?: string) => ({
+            blockhash,
+            lastValidBlockHeight: 4_321,
+        }));
+        const sendRawTransaction = vi.fn(async (_raw: Buffer): Promise<string> => {
+            throw new Error("429 Too Many Requests: devnet rate limited");
+        });
+        const connection = {
+            getLatestBlockhash,
+            sendRawTransaction,
+        } as unknown as Connection;
+
+        const { client, driver } = makeClient(connection);
+        const [scenario] = PublicKey.findProgramAddressSync(
+            [Buffer.from("scenario"), client.programAddress.toBytes()],
+            client.programAddress,
+        );
+
+        const rejections: unknown[] = [];
+        const onUnhandled = (reason: unknown): void => {
+            rejections.push(reason);
+        };
+        process.on("unhandledRejection", onUnhandled);
+        let result: TxResult;
+        try {
+            // The await resolves: the failure is reported, never thrown at
+            // the caller and never left unhandled.
+            result = await client.ack({ scenario, signer: driver.publicKey });
+            // One full turn of the event loop, so a rejection escaping the
+            // await chain would surface before the listener is removed.
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        } finally {
+            process.off("unhandledRejection", onUnhandled);
+        }
+        expect(rejections).toEqual([]);
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+            expect(result.error).toBe("RpcError: 429 Too Many Requests: devnet rate limited");
+        }
+    });
+
+    it("reports a failed blockhash read as a typed RpcError instead of delegating", async () => {
+        const getLatestBlockhash = vi.fn(async (_commitment?: string) => {
+            throw new Error("429 Too Many Requests: getLatestBlockhash rate limited");
+        });
+        const connection = { getLatestBlockhash } as unknown as Connection;
+
+        const { client, driver } = makeClient(connection);
+        const [scenario] = PublicKey.findProgramAddressSync(
+            [Buffer.from("scenario"), client.programAddress.toBytes()],
+            client.programAddress,
+        );
+
+        const result = await client.ack({ scenario, signer: driver.publicKey });
+
+        expect(getLatestBlockhash.mock.calls).toHaveLength(1);
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+            expect(result.error).toBe(
+                "RpcError: 429 Too Many Requests: getLatestBlockhash rate limited",
+            );
+        }
+    });
+
+    it("reads the blockhash and confirms at the client's configured commitment", async () => {
+        const blockhash = Keypair.generate().publicKey.toBase58();
+        const signature = Keypair.generate().publicKey.toBase58();
+        const getLatestBlockhash = vi.fn(async (_commitment?: string) => ({
+            blockhash,
+            lastValidBlockHeight: 4_321,
+        }));
+        const sendRawTransaction = vi.fn(async (_raw: Buffer): Promise<string> => signature);
+        const confirmTransaction = vi.fn(
+            async (_strategy: unknown, _commitment?: string) => ({
+                context: { slot: 1 },
+                value: { err: null },
+            }),
+        );
+        const connection = {
+            getLatestBlockhash,
+            sendRawTransaction,
+            confirmTransaction,
+        } as unknown as Connection;
+
+        const driver = Keypair.generate();
+        const partyB = Keypair.generate();
+        const wallet = Keypair.generate();
+        const client = new AnchorClient({
+            connection,
+            usdMint: USD_MINT,
+            cadMint: CAD_MINT,
+            driver,
+            partyB,
+            wallet: keypairWallet(wallet),
+            commitment: "processed",
+        });
+        const [scenario] = PublicKey.findProgramAddressSync(
+            [Buffer.from("scenario"), client.programAddress.toBytes()],
+            client.programAddress,
+        );
+
+        const result = await client.ack({ scenario, signer: driver.publicKey });
+
+        expect(result.ok).toBe(true);
+        expect(getLatestBlockhash.mock.calls[0]?.[0]).toBe("processed");
+        expect(confirmTransaction.mock.calls[0]?.[1]).toBe("processed");
+        const strategy = confirmTransaction.mock.calls[0]?.[0] as {
+            blockhash: string;
+        };
+        // The confirmation strategy carries the same fresh read the
+        // transaction was signed with, at the same commitment.
+        expect(strategy.blockhash).toBe(blockhash);
     });
 });
 

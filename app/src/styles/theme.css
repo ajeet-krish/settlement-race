@@ -1,0 +1,104 @@
+/*
+ * Settlement Race design tokens.
+ *
+ * Direction: a settlement desk console, the dark housing of an RTGS style
+ * terminal, carrying a printed advice slip in bone type. The accent pair
+ * encodes the product itself: amber is the exposure window the sequential
+ * path leaves open, teal is delivery versus payment where both legs move
+ * together. Six named colors only; everything else is derived from them.
+ */
+
+:root {
+    /* Color roles.
+       settle-ground: deep petrol, the console housing. Page background,
+           never text.
+       advice-bone: the printed settlement advice. Primary text on ground.
+       exposure-amber: the gap window where principal risk sits open. The
+           sequential lane, the devnet badge, and the focus ring.
+       finality-teal: delivery versus payment, both legs or neither. The
+           atomic lane.
+       default-clay: a defaulted leg, the sequential path's losing
+           terminal. Reserved for loss states in later slices.
+       steel-rule: chrome, borders and dividers. Never text. */
+    --settle-ground: #0f1b1d;
+    --advice-bone: #ece7db;
+    --exposure-amber: #e9a13b;
+    --finality-teal: #58b3a0;
+    --default-clay: #d9604b;
+    --steel-rule: #35474a;
+
+    /* Derived text tones (no new hex values). */
+    --text-muted: color-mix(in srgb, var(--advice-bone) 72%, transparent);
+    --text-faint: color-mix(in srgb, var(--advice-bone) 54%, transparent);
+
+    /* Type: one superfamily, three roles. Condensed display for the
+       ticker style brand and tabs, plain sans for educational copy,
+       mono for amounts, hashes, badges, and status chips. */
+    --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui,
+        sans-serif;
+    --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI",
+        sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas,
+        monospace;
+
+    /* Type scale, 1.25-ish steps from 0.75rem. */
+    --text-xs: 0.75rem;
+    --text-sm: 0.875rem;
+    --text-base: 1rem;
+    --text-lg: 1.125rem;
+    --text-xl: 1.375rem;
+    --text-2xl: 1.75rem;
+    --text-3xl: 2.25rem;
+
+    /* Spacing scale, 4px base. */
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.5rem;
+    --space-6: 2rem;
+    --space-7: 3rem;
+
+    /* Focus visible ring: amber so it reads as an alert on petrol. */
+    --focus-ring: 2px solid var(--exposure-amber);
+    --focus-ring-offset: 2px;
+
+    /* Motion: short, mechanical, no bounce. */
+    --motion-fast: 120ms;
+    --motion-base: 200ms;
+    --ease-out: cubic-bezier(0.2, 0.8, 0.3, 1);
+
+    color-scheme: dark;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --motion-fast: 0.01ms;
+        --motion-base: 0.01ms;
+    }
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background-color: var(--settle-ground);
+    color: var(--advice-bone);
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+}

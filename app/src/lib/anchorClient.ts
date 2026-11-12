@@ -13,13 +13,24 @@
  *   signed by the driver or the bot additionally carry that keypair's
  *   signature.
  *
+ * Every submit funnels through one send helper instead of
+ * `Program.methods().rpc()`: the helper compiles the transaction with a
+ * blockhash fetched before send, partial signs it with the authority
+ * keypair and the wallet, sends it with `sendRawTransaction`, and confirms
+ * with the explicit blockhash strategy
+ * `connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight })`,
+ * which polls the RPC rather than opening a websocket signature
+ * subscription. Transport failures inside that chain are normalized to
+ * typed `Code: message` errors, so a submit always resolves to a TxResult
+ * and never to a rejection escaping the await chain.
+ *
  * Program error strings are formatted `<ErrorName>: <message>` (for example
  * `NotParty: Signer is not an authorized party for this scenario`), the same
  * convention the offline mock uses, so callers and tests can parse the code
  * out of a failed TxResult without special casing each client. Failures that
  * are not program errors keep the same shape with a typed code: a missing
- * account read inside a submit is `AccountNotFound: ...` and any other RPC
- * shaped failure is `RpcError: ...`.
+ * account read (inside a submit or from a direct fetch) is
+ * `AccountNotFound: ...` and any other RPC shaped failure is `RpcError: ...`.
  */
 
 import {
@@ -35,7 +46,12 @@ import {
     Transaction,
     VersionedTransaction,
 } from "@solana/web3.js";
-import type { Commitment, Connection, Signer } from "@solana/web3.js";
+import type {
+    BlockhashWithExpiryBlockHeight,
+    Commitment,
+    Connection,
+    Signer,
+} from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-token";
 import idlJson from "./settlement_race.json";
 import type { SettlementRace } from "./settlementRaceTypes";
@@ -131,13 +147,18 @@ export function keypairWallet(keypair: Signer): AnchorWallet {
 type Authority = { kind: "keypair"; signer: Signer } | { kind: "wallet" };
 
 /**
- * Minimal structural view of an Anchor methods builder: enough to attach
- * the extra keypair signature and submit. Keeps one private helper usable
- * across every instruction type without naming each generic instantiation.
+ * Minimal structural view of an Anchor methods builder: enough to compile
+ * the transaction for the polling send path and to fall back onto the
+ * provider send when no blockhash can be anchored. Keeps one private
+ * helper usable across every instruction type without naming each generic
+ * instantiation.
  */
 interface SubmitBuilder {
     signers(signers: Signer[]): unknown;
+    /** Provider backed send and confirm, used only without a blockhash. */
     rpc(): Promise<string>;
+    /** Compile the configured instruction into an unsigned transaction. */
+    transaction(): Promise<Transaction>;
 }
 
 /** Decoded Scenario account as returned by the Anchor coder. */
@@ -223,12 +244,17 @@ function formatTxError(err: unknown): string {
     return withTypedCode(String(err));
 }
 
-/** Format an account fetch failure (missing account, bad discriminator). */
+/**
+ * Format an account fetch failure (missing account, bad discriminator) with
+ * the same `Code: message` typing the mock client uses, so both clients
+ * surface identical error shapes for the same failure: not-found wording
+ * becomes `AccountNotFound: ...` and anything else `RpcError: ...`.
+ */
 function formatFetchError(err: unknown): string {
     if (err instanceof Error) {
-        return err.message;
+        return withTypedCode(err.message);
     }
-    return String(err);
+    return withTypedCode(String(err));
 }
 
 export class AnchorClient implements ProgramClient {
@@ -237,6 +263,10 @@ export class AnchorClient implements ProgramClient {
     private readonly usdMint: PublicKey;
     private readonly cadMint: PublicKey;
     private readonly wallet: AnchorWallet;
+    /** RPC connection used for blockhash, send, and polling confirmation. */
+    private readonly connection: Connection;
+    /** Commitment for blockhash reads and transaction confirmation. */
+    private readonly commitment: Commitment;
     private readonly keypairs = new Map<string, Signer>();
     /** Party keys per scenario, filled at init and refreshed on fetch. */
     private readonly partyKeys = new Map<string, PartyKeys>();
@@ -253,6 +283,8 @@ export class AnchorClient implements ProgramClient {
         this.usdMint = options.usdMint;
         this.cadMint = options.cadMint;
         this.wallet = options.wallet;
+        this.connection = options.connection;
+        this.commitment = options.commitment ?? "confirmed";
         this.keypairs.set(options.driver.publicKey.toBase58(), options.driver);
         this.keypairs.set(options.partyB.publicKey.toBase58(), options.partyB);
 
@@ -261,7 +293,7 @@ export class AnchorClient implements ProgramClient {
             options.wallet,
             {
                 ...AnchorProvider.defaultOptions(),
-                commitment: options.commitment ?? "confirmed",
+                commitment: this.commitment,
             },
         );
         // The Program reads its program id from the IDL address field, so a
@@ -565,15 +597,90 @@ export class AnchorClient implements ProgramClient {
         }
     }
 
-    /** Send a prepared builder with the authority applied. */
+    /**
+     * Send a prepared builder with the authority applied.
+     *
+     * One helper for every instruction submit: compile the transaction with
+     * a blockhash fetched before send, partial sign it with the authority
+     * keypair and the wallet, send it with `sendRawTransaction`, then
+     * confirm with the explicit blockhash strategy, which polls the RPC for
+     * status instead of subscribing to the signature over a websocket. Any
+     * failure inside the chain (blockhash read, wallet, send, confirmation,
+     * expiry) is rethrown as a typed `Code: message` error, so the caller's
+     * catch always yields a TxResult and nothing escapes the await chain as
+     * an unhandled rejection.
+     */
     private async send(
         builder: SubmitBuilder,
         authority: Authority,
     ): Promise<string> {
-        if (authority.kind === "keypair") {
-            builder.signers([authority.signer]);
+        try {
+            const blockhash = await this.confirmBlockhash();
+            if (blockhash === null) {
+                // The connection cannot anchor a confirmation strategy, so
+                // delegate to the provider send, which resolves its own
+                // blockhash and reports failures through the same typed
+                // errors.
+                if (authority.kind === "keypair") {
+                    builder.signers([authority.signer]);
+                }
+                return builder.rpc();
+            }
+            const tx = await builder.transaction();
+            tx.feePayer = tx.feePayer ?? this.wallet.publicKey;
+            // Always re-set from the fresh read: a blockhash pre-set on the
+            // transaction could come from a different read than the
+            // lastValidBlockHeight below, which would break the pairing the
+            // confirmation strategy relies on.
+            tx.recentBlockhash = blockhash.blockhash;
+            if (authority.kind === "keypair") {
+                tx.partialSign(authority.signer);
+            }
+            const signed = await this.wallet.signTransaction(tx);
+            const signature = await this.connection.sendRawTransaction(
+                signed.serialize(),
+                { preflightCommitment: this.commitment },
+            );
+            const confirmation = await this.connection.confirmTransaction(
+                {
+                    signature,
+                    blockhash: blockhash.blockhash,
+                    lastValidBlockHeight: blockhash.lastValidBlockHeight,
+                },
+                this.commitment,
+            );
+            if (confirmation.value.err) {
+                throw new Error(
+                    `Raw transaction ${signature} failed (${JSON.stringify(confirmation.value.err)})`,
+                );
+            }
+            return signature;
+        } catch (err) {
+            if (err instanceof AnchorError || err instanceof ProgramError) {
+                throw err;
+            }
+            // Everything else is transport or client shaped: give it the
+            // shared `Code: message` form so the caller formats one
+            // TxResult shape for every failure.
+            throw new Error(formatTxError(err));
         }
-        return builder.rpc();
+    }
+
+    /**
+     * Recent blockhash and expiry height for the polling confirmation.
+     *
+     * A connection that cannot supply one at all (a stub or partial
+     * transport without blockhash reads) yields null, so the caller
+     * delegates the send to the provider, which resolves its own blockhash
+     * before sending. A real RPC failure is rethrown instead: it becomes a
+     * typed `RpcError` result rather than a drop back onto a websocket
+     * confirmation.
+     */
+    private async confirmBlockhash(): Promise<BlockhashWithExpiryBlockHeight | null> {
+        if (typeof this.connection.getLatestBlockhash !== "function") {
+            return null;
+        }
+        return await this.connection.getLatestBlockhash(this.commitment);
     }
 
     /**

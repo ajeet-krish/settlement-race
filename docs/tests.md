@@ -1,6 +1,6 @@
 # Settlement Race Test Results
 
-Last updated: 2026-11-11
+Last updated: 2026-11-12
 
 ## 2026-11-10 - Phase 1: Test Report
 
@@ -375,3 +375,107 @@ npx tsx scripts/smoke-phase3.ts   # live devnet smoke (spends SOL, prints a summ
 - web3.js websocket errors during confirmation can arrive outside the promise chain; scripts that must report honestly should install process level handlers in addition to try catch, and pace sends to stay under the public devnet rate limit (400 ms per step eliminated all 429s in run 2).
 - The zero time precondition of start_race means any end to end flow needs an advanceClock before the first start_race, even when the surrounding scenario never mentions the clock.
 - Smoke token amounts were chosen at 100000/130000 integer cents (the Rust suite's values) rather than the UI's 1000000/1350000, because the devnet accounts hold exactly one UI sized lane; two lanes at the UI size would exceed party A's USD balance with the faucet closed.
+
+## 2026-11-12 - Phase 4: Tester round (suite verification, coverage gap tests, build and dist evidence)
+
+Scope: independent re-execution of the Phase 4 verification commands, closure of the coverage gaps routed by the Phase 4 code review and security review (and their two re-reviews) in docs/reviews.md, and a manual double run of scripts/setup-devnet.ts for the driver top-up guard. Test code only: no source file under app/src, scripts/, or programs/ was modified, and no cargo or anchor command was run (Rust untouched this phase).
+
+### Suite results (all re-run by the tester)
+
+| Suite | Command | Result |
+|-------|---------|--------|
+| Vitest (app) | `cd app && npm test` | PASS: 23 files, 263 tests (247 baseline after the two fix rounds, plus 16 new below) |
+| Type check (app) | `cd app && npx tsc --noEmit` | PASS (strict mode, exit 0) |
+| Type check (repo root) | `npx tsc --noEmit` at repo root (same as `npm run typecheck`) | PASS (exit 0) |
+| Production build | `cd app && npm run build` | PASS (tsc + vite, exit 0) with the expected demo-accounts exclusion warning; see dist evidence below |
+| npm audit (app) | `cd app && npm audit` | 12 vulnerabilities (7 moderate, 5 high), unchanged; see the npm audit note from the Phase 3 tester round |
+| Rust suites | not rerun | program source untouched this phase; Phase 2 roster of 32 stands |
+
+### New tests (16 added across 5 files, all PASS)
+
+| Test file | Test | Verdict | Notes |
+|-----------|------|---------|-------|
+| `src/lib/__tests__/raceSourceIdBase.test.ts` (new) | formula returns `((now mod 1e6) * 2 + 1)` exactly on a fresh session | PASS | `1_700_000_123_456` to `246_913`, odd; fresh module per case via `vi.resetModules` because the base is module scoped state |
+| same | formula is odd and exact at the modulus boundaries | PASS | `0`, `1`, `999_999`, `1_000_000`, `2_500_000_999_999` each to the exact expected odd base |
+| same | never hands out the same base twice in one session | PASS | repeat steps `+2`, an earlier timestamp also steps `+2` above the last base (session monotonic guard) |
+| `src/lib/__tests__/raceSource.test.ts` | never overlaps lane ids across two consecutive runs when the probe reports every PDA free | PASS | probe mocked returning null; two runs yield `[s1, a1, s2, a2]` with `a1 = s1+1`, `a2 = s2+1`, and `s2 > a1` (strict non-collision); probe consulted at least 4 times |
+| `src/engine/__tests__/scenarioEngine.test.ts` | skips the anchor phase entirely when `anchor_head` is false | PASS | no `CHAIN_ANCHORED` event, `anchorChainHead` spy never called, local chain still verifies, `fetchChainHead` finds no stored head |
+| same | throws an unfair start error when the lane notionals diverge | PASS | `fetchScenario` wrapper reports `leg2_cad_cents + 1n` on the atomic lane; run rejects with `ScenarioEngine: unfair start: leg2_cad_cents` (first real negative test of the fairness assert) |
+| same | throws with the failing label when a client transaction fails | PASS | `initScenario` returns `BadState`; run rejects with `ScenarioEngine: initialize sequential lane failed: BadState: ...` and yields zero events |
+| `src/components/__tests__/racePanelProps.test.tsx` (new) | disconnected default copy, disabled Run, pending chain pill | PASS | SSR markup via `react-dom/server` (existing dependency; no DOM testing library added) |
+| same | supplied notice replaces the default copy while disconnected | PASS | `role="note"` branch pinned; default copy absent |
+| same | live drops the disconnected copy and gates Run on a selected scenario | PASS | run hint flips to `Choose a scenario first`; `role="alert"` branch pinned for a live failure notice |
+| same | live with no notice renders neither notice block | PASS | no `race-disconnected` and no `race-notice` elements |
+| same | `chainStatus` passes through to pill wording and class | PASS | `VALID` to `chain-pill-valid` / `chain valid`, `BROKEN` to `chain-pill-broken` / `chain broken` |
+| same | live plus a scenario prop enables Run and marks the card selected | PASS | Run button has no `disabled` attribute; exactly the selected picker card class appears |
+| `src/__tests__/viteExcludeDemoAccounts.test.ts` (new) | plugin is registered and applied to build only | PASS | name `exclude-demo-accounts`, `apply: "build"`, plain `closeBundle` function |
+| same | removes a planted `dist/demo-accounts.json` and warns, leaving other dist entries untouched | PASS | plants one file at the guarded path, runs the hook, asserts the file is gone, the dist entry list is byte for byte the pre-plant list, and `console.warn` carries `demo-accounts.json excluded from dist` plus `devnet demo keys` |
+| same | still emits the exclusion warning when the file is absent | PASS | warning fires on every build, file absent or not (one call, same text) |
+
+Baseline before this round: 247 tests in 20 files. Final: 263 tests in 23 files (16 new: 3 in one new pure file, 6 in one new component contract file, 3 in one new build guard file, plus 1 and 3 added to existing files).
+
+### Routed gap status from docs/reviews.md Phase 4
+
+| Routed item | Status |
+|-------------|--------|
+| Code review Medium: raceTiming speed-change monotonicity | Already closed in the fix round (`rescaleWallMs` plus 4 test groups); not re-tested this round |
+| Code review Low: `demoAccounts` bad_pubkey cross-check | CONFIRMED present: 3 tests in `demoAccounts.test.ts` (mismatched base58 pair, mismatched number array pair, matching pair), each asserting no secret in the message |
+| Code review Info: `scenario_id_base` probe and formula notes | CLOSED by the 4 new raceSource tests above (exact formula, boundaries, session monotonicity, two-run non-collision with a mocked probe) |
+| Code review Info: race UI display monotonicity and other UI checks | Already covered by `raceTiming.test.ts`, `panelMaxWidth.test.ts`, `raceLabels.test.ts`, `raceBalances.test.ts`; RacePanel props contract added above |
+| Code review Low: `anchorClient` blockhash pairing and commitment level | CONFIRMED present: `anchorClient.test.ts` has `reads the blockhash and confirms at the client's configured commitment` (same level on read and confirm) plus the strategy pairing test |
+| Security review Medium: dist ships `demo-accounts.json` | CLOSED: build-only plugin unit tested above plus real build evidence below |
+| Security review Medium: dev-server CORS | Fix verified in the security re-review (`server.cors: false`); no test seam exists without starting a server, left as static evidence |
+| Security review Low: smoke keypair chmod | Fixed and verified in the security re-review; not re-tested here |
+| Security review Low: driver top-up cumulative guard | Verified by manual double run below (not unit testable: `fundDriver` is not exported and importing the script runs `main()` unconditionally at setup-devnet.ts:950) |
+
+### Build and dist evidence (demo-accounts exclusion)
+
+- `cd app && npm run build` exits 0 and prints, after the bundle report: `demo-accounts.json excluded from dist (contains devnet demo keys); run the app with npm run dev after npx tsx scripts/setup-devnet.ts`
+- `ls app/dist` after the build: `assets` and `index.html` only. `app/dist/demo-accounts.json` does not exist (verified with `ls`, exit 1 for that path).
+- `app/public/demo-accounts.json` is still on disk (the dev server needs it) with mode `600`, before and after the setup script re-ran.
+- The unit test plants the guarded path, proves the hook removes it while every other dist entry survives, and restores the pre-test state; it never runs concurrently with a build (vitest and `npm run build` are separate commands), so a real dist cannot be nuked mid-build.
+
+### setup-devnet driver top-up guard: manual double run
+
+`npx tsx scripts/setup-devnet.ts` was executed twice against devnet (no `--reset`, nothing drained):
+
+| Run | Exit | Driver line observed |
+|-----|------|----------------------|
+| 1 | 0 | `demo driver A5LmqPKK7aVTkh7bHAWvNosj6MBNCjW6eiAHAcyuGYDL already holds 0.239357400 SOL` (skip, no transfer) |
+| 2 | 0 | identical line and identical balance (skip, no transfer) |
+
+Both runs also reported the parties already funded (0.990408820 and 0.990908820 SOL), mints reused, and all four token balances already at target (nothing minted). The fresh-run threshold (`DRIVER_MIN_LAMPORTS`, 0.05 SOL) correctly skipped in both processes; the in-run repeat threshold (`DRIVER_TOPPED_LAMPORTS`, 0.1 SOL, setup-devnet.ts:598-617) is not observable from the CLI because `fundDriver` is called exactly once per process (main, setup-devnet.ts:806), so it rests on the static evidence in the security fix round re-verification. Unit testing the guard would require exporting `fundDriver` (a source change) or importing the script, which triggers `main()`; both were out of scope for this test-only round.
+
+### Live smoke reference (Phase 4 wiring, reported by the orchestrator)
+
+The Phase 4 wiring smoke run recorded 20 transactions, both lanes `SETTLED`, chain verification `VALID`, and 0.01084 SOL spent. This round did not re-run the live smoke (the tester round only re-ran offline commands plus the two idempotent setup runs above); the figure is cited from the Phase 4 wiring report.
+
+### Final Phase 4 roster (supersedes the 247 count)
+
+- Vitest: 263 tests in 23 files. Composition: 247 passing tests in 20 files after the two Phase 4 fix rounds, plus 16 tests added in this round (12 tests in 3 new files, 4 tests in 2 existing files).
+- Rust: 32 (27 LiteSVM integration plus 5 schema units), unchanged and not rerun this phase.
+- Repository total: 295 tests, all passing (Vitest 263 re-executed; Rust roster cited from Phase 2).
+
+### Findings (no source code was modified)
+
+- No bug found. Every routed gap item behaved as specified: the formula base is exactly `((now mod 1e6) * 2 + 1)` and odd, consecutive runs cannot collide (session step of 2 plus the chain probe), the fairness assert really throws on a one cent notional mismatch, `anchor_head: false` skips the anchor phase completely, the build plugin removes the planted key file and warns, and the setup script skips the driver top-up idempotently across reruns.
+- T1 (observation, pinned behavior not a bug): RacePanel's notice branch is `disconnected` to `role="note"` (default copy or supplied notice) and `live` with a notice to `role="alert"`; a disconnected panel never escalates to `role="alert"`. The first draft of the new contract test expected `role="alert"` while disconnected and failed; the assertion was corrected to pin the actual branch (test file only).
+- T2 (judgment call): no DOM testing library exists (node environment, no jsdom, no testing-library), so RacePanel component tests were written as static markup assertions through `react-dom/server`'s `renderToStaticMarkup`, which is part of the already installed `react-dom`. No dependency was added and the environment stays DOM free; effects never run during server rendering, so the tests pin prop to markup mapping only (defaults, notice branching, run gating, chain pill passthrough) and leave interactive behavior to the pure `raceTiming` suites.
+- T3 (testability note for a later phase): `scripts/setup-devnet.ts` exports only `writeDemoAccounts` and executes `main()` on import, so nothing in the driver or funding path is unit testable without a source change (an export or an `import.meta.url` entry guard). If Phase 5 or 6 wants unit coverage there, route an entry-guard refactor to backend-dev first.
+
+### How to run
+
+```bash
+cd app && npm test          # 263 tests, 23 files
+cd app && npx tsc --noEmit  # strict type check
+cd app && npm run build     # tsc + vite; prints the demo-accounts exclusion warning
+npx tsc --noEmit            # repo root, covers scripts/
+npx tsx scripts/setup-devnet.ts   # devnet setup (idempotent; skips funded wallets)
+```
+
+### Recurring patterns for other agents (additions)
+
+- Module scoped session state (like `lastScenarioIdBase`) cannot be tested for exact values from a shared static import; use a fresh module per case (`vi.resetModules` plus dynamic import) or a dedicated test file, and assert exact formula equality only on a fresh instance.
+- Build plugins that guard a fixed path are still unit testable through the exported config object: find the plugin by `name` in `config.plugins`, drive its hook directly, plant exactly the one guarded path, and assert the rest of the output directory is untouched.
+- Server rendering with `renderToStaticMarkup` pins prop to markup contracts in a node test environment without adding a DOM library; effects do not run, so keep such tests to static mapping and leave interaction to pure logic suites.
+- Scripts that run `main()` at import time are untestable by design; the honest options are a manual run (as done here) or an entry guard refactor, and docs/tests.md should record which one was chosen.

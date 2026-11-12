@@ -11,3 +11,5 @@ test-ledger/
 # Devnet setup output: pubkeys plus party keypair secrets (devnet only)
 scripts/devnet-accounts.json
 scripts/devnet-keypairs.json
+# Browser demo accounts: three devnet keypair secrets, written by setup-devnet
+app/public/demo-accounts.json

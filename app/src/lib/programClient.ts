@@ -1,7 +1,7 @@
 /**
  * Typed interface for the Settlement Race on-chain client.
  *
- * Phase 2 provides the concrete implementation against the Anchor IDL; this
+ * Phase 3 provides the concrete implementation against the Anchor IDL; this
  * module only fixes the contract so the UI and engine can be written against
  * stable types. Every mutating method resolves to a TxResult carrying either
  * the transaction signature or an error string, so callers never have to
