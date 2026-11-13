@@ -132,9 +132,11 @@ describe("learn content structure", () => {
         }
         expect(markup).toContain("What CLS does that this does not");
         expect(markup).toContain("N = G");
-        expect(markup).toContain('role="region"');
+        expect(markup).toContain('role="table"');
         expect(markup).toContain('aria-labelledby="learn-table-caption"');
-        expect(markup).toContain("Scroll sideways to compare all three rails.");
+        // Narrow screens restack the table into labelled blocks, so every
+        // rail value carries its rail name in the markup.
+        expect(markup).toContain('class="learn-cell-label"');
         expect(markup).toContain('id="cite-14"');
     });
 });

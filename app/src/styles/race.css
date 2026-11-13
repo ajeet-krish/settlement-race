@@ -162,6 +162,13 @@
     grid-template-columns: minmax(17rem, 1fr) minmax(21rem, 1.5fr);
 }
 
+/* Grid children default to min-width auto, which lets a wide log row
+   push the whole split past the viewport. Both cards opt out so their
+   contents wrap inside the column instead. */
+.race-lower > * {
+    min-width: 0;
+}
+
 /* Console card: every race block sits on this raised petrol plate. */
 .picker,
 .track,
@@ -807,7 +814,10 @@
     text-transform: uppercase;
 }
 
-/* Event log: one mono grid row per record, newest pinned at the bottom. */
+/* Event log: one mono record per line, newest pinned at the bottom.
+   Below 80rem the row wraps instead of holding six columns, because a
+   six column grid plus the status snapshot cannot fit the narrower
+   balances/log split. */
 .log-list {
     display: flex;
     flex-direction: column;
@@ -823,10 +833,11 @@
     align-items: baseline;
     border-bottom: 1px solid color-mix(in srgb, var(--steel-rule) 60%, transparent);
     column-gap: var(--space-3);
-    display: grid;
+    display: flex;
+    flex-wrap: wrap;
     font-family: var(--font-mono);
     font-size: var(--text-xs);
-    grid-template-columns: 2rem 2.6rem minmax(9rem, 1fr) 4.5rem 6.5rem auto;
+    row-gap: var(--space-1);
     padding: var(--space-2) var(--space-1);
 }
 
@@ -858,8 +869,7 @@
 .log-event {
     color: var(--advice-bone);
     letter-spacing: 0.04em;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
 }
 
 .log-ts {
@@ -887,7 +897,9 @@
     padding: var(--space-2) 0;
 }
 
-/* Chain verification pill: the word carries the state, colour reinforces. */
+/* Chain verification pill: the word carries the state, colour reinforces.
+   Green verifies, red breaks, yellow warns while nothing has been
+   checked yet. */
 .chain-pill {
     align-items: center;
     border: 1px solid;
@@ -912,8 +924,8 @@
 }
 
 .chain-pill-valid {
-    border-color: color-mix(in srgb, var(--finality-teal) 55%, transparent);
-    color: var(--finality-teal);
+    border-color: color-mix(in srgb, var(--accent-green) 55%, transparent);
+    color: var(--accent-green);
 }
 
 .chain-pill-broken {
@@ -922,8 +934,8 @@
 }
 
 .chain-pill-pending {
-    border-color: var(--steel-rule);
-    color: var(--text-muted);
+    border-color: color-mix(in srgb, var(--accent-yellow) 45%, transparent);
+    color: var(--accent-yellow);
 }
 
 /* Stacks below 48rem: lanes, then the balances and log columns. */
@@ -957,16 +969,6 @@
         grid-template-columns: 1fr;
     }
 
-    .log-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: var(--space-1) var(--space-3);
-    }
-
-    .log-status {
-        text-align: left;
-    }
-
     .timeline-clock {
         margin-left: 0;
     }
@@ -977,5 +979,21 @@
     .balances,
     .log {
         padding: var(--space-4);
+    }
+}
+
+/* Wide desks get the aligned six column log grid; narrower widths keep
+   the wrapped rows from above, which is also what the stacked
+   balances/log split needs while it is two columns. */
+@media (min-width: 80rem) {
+    .log-row {
+        display: grid;
+        grid-template-columns: 2rem 2.6rem minmax(9rem, 1fr) 4.5rem 6.5rem auto;
+        column-gap: var(--space-3);
+        row-gap: 0;
+    }
+
+    .log-status {
+        text-align: right;
     }
 }

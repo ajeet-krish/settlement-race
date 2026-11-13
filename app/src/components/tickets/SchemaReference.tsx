@@ -4,8 +4,8 @@ import { TICKET_FIELD_DOCS } from "./ticketView";
  * Schema reference: the full version 1 field table from
  * docs/tradeops-schema.md inside a native details element, so the
  * section is collapsed by default, keyboard operable, and announced
- * correctly without any script. The table wraps in a labelled,
- * focusable region so narrow screens can scroll it by keyboard.
+ * correctly without any script. The table columns give way to each
+ * other instead of scrolling, so narrow screens read it inline.
  */
 export default function SchemaReference() {
     return (
@@ -24,12 +24,7 @@ export default function SchemaReference() {
                     JSON and hashed into ticket_hash, so the chain commits to
                     the exact text a party read.
                 </p>
-                <div
-                    className="tkt-table-wrap"
-                    role="region"
-                    aria-label="Ticket field reference"
-                    tabIndex={0}
-                >
+                <div className="tkt-table-wrap">
                     <table className="tkt-table">
                         <thead>
                             <tr>

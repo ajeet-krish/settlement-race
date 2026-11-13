@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
-    SEGMENT_WALL_MS,
     displayVirtualMs,
     formatVirtualSeconds,
     playheadState,
     rescaleWallMs,
     riskWindow,
     snappedDisplayVirtualMs,
+    streamWallMs,
 } from "../raceTiming";
 import { makeEvent } from "./eventFixtures";
 
@@ -22,15 +22,26 @@ describe("displayVirtualMs", () => {
         expect(displayVirtualMs(events, 9_999, 2)).toBe(0n);
     });
 
-    it("interpolates linearly between consecutive stamps", () => {
+    it("counts up proportionally through each segment", () => {
         const events = [
             makeEvent({ event: "RACE_STARTED", ts: 0n }),
             makeEvent({ event: "LEG1_RELEASED", ts: 1_000n }),
         ];
         expect(displayVirtualMs(events, 0, 1)).toBe(0n);
-        expect(displayVirtualMs(events, SEGMENT_WALL_MS / 4, 1)).toBe(250n);
-        expect(displayVirtualMs(events, SEGMENT_WALL_MS / 2, 1)).toBe(500n);
-        expect(displayVirtualMs(events, SEGMENT_WALL_MS, 1)).toBe(1_000n);
+        expect(displayVirtualMs(events, 250, 1)).toBe(250n);
+        expect(displayVirtualMs(events, 500, 1)).toBe(500n);
+        expect(displayVirtualMs(events, 1_000, 1)).toBe(1_000n);
+        expect(displayVirtualMs(events, 1_500, 1)).toBe(1_000n);
+    });
+
+    it("gives a wide exposure window watchable wall time instead of a flash", () => {
+        const events = [
+            makeEvent({ event: "LEG1_RELEASED", ts: 0n }),
+            makeEvent({ event: "LEG2_RELEASED", ts: 8_000n }),
+        ];
+        expect(displayVirtualMs(events, 2_000, 1)).toBe(2_000n);
+        expect(displayVirtualMs(events, 4_000, 1)).toBe(4_000n);
+        expect(displayVirtualMs(events, 8_000, 1)).toBe(8_000n);
     });
 
     it("scales playback with speed: 2x twice as fast, 0.5x half as fast", () => {
@@ -38,7 +49,7 @@ describe("displayVirtualMs", () => {
             makeEvent({ event: "RACE_STARTED", ts: 0n }),
             makeEvent({ event: "LEG1_RELEASED", ts: 1_000n }),
         ];
-        const wall = SEGMENT_WALL_MS / 2;
+        const wall = 500;
         expect(displayVirtualMs(events, wall, 2)).toBe(1_000n);
         expect(displayVirtualMs(events, wall, 1)).toBe(500n);
         expect(displayVirtualMs(events, wall, 0.5)).toBe(250n);
@@ -63,7 +74,7 @@ describe("displayVirtualMs", () => {
             makeEvent({ event: "DEFAULT_DECLARED", ts: 7_000n }),
         ];
         let previous = -1n;
-        for (let wall = 0; wall <= 5_000; wall += 100) {
+        for (let wall = 0; wall <= 7_500; wall += 100) {
             const value = displayVirtualMs(events, wall, 1);
             expect(value >= previous).toBe(true);
             previous = value;
@@ -81,13 +92,9 @@ describe("snappedDisplayVirtualMs", () => {
 
     it("holds each segment's first stamp instead of interpolating", () => {
         expect(snappedDisplayVirtualMs(events, 0, 1)).toBe(1_000n);
-        expect(snappedDisplayVirtualMs(events, SEGMENT_WALL_MS - 1, 1)).toBe(
-            1_000n,
-        );
-        expect(snappedDisplayVirtualMs(events, SEGMENT_WALL_MS, 1)).toBe(2_000n);
-        expect(snappedDisplayVirtualMs(events, 2 * SEGMENT_WALL_MS, 1)).toBe(
-            5_000n,
-        );
+        expect(snappedDisplayVirtualMs(events, 999, 1)).toBe(1_000n);
+        expect(snappedDisplayVirtualMs(events, 1_000, 1)).toBe(2_000n);
+        expect(snappedDisplayVirtualMs(events, 4_000, 1)).toBe(5_000n);
     });
 
     it("clamps to the last stamp and handles empty and single streams", () => {
@@ -165,12 +172,12 @@ describe("speed changes mid playback", () => {
         for (const [from, to] of switches) {
             let wall = 0;
             // Play the first half of the stream at the original speed.
-            const halfWall = ((stream.length - 1) * SEGMENT_WALL_MS) / from / 2;
+            const halfWall = streamWallMs(stream) / from / 2;
             while (wall < halfWall) {
                 wall += 50;
             }
             wall = rescaleWallMs(wall, from, to);
-            const endWall = ((stream.length - 1) * SEGMENT_WALL_MS) / to;
+            const endWall = streamWallMs(stream) / to;
             let previous = displayVirtualMs(stream, wall, to);
             // Keep ticking at the new speed: never rewind, always arrive.
             while (wall < endWall) {
@@ -192,7 +199,7 @@ describe("speed changes mid playback", () => {
             // The snap sits in the same segment before and after the switch.
             expect(snappedDisplayVirtualMs(stream, rescaled, to)).toBe(before);
 
-            const endWall = ((stream.length - 1) * SEGMENT_WALL_MS) / to;
+            const endWall = streamWallMs(stream) / to;
             let previous = before;
             let current = rescaled;
             while (current < endWall) {

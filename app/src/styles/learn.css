@@ -418,7 +418,9 @@
 }
 
 /* Comparison table: mono figures, hairline rules, teal top rules on
-   the two synchronized rails. The wrapper scrolls and takes focus. */
+   the two synchronized rails. Below 48rem the stylesheet flattens it
+   into stacked labelled blocks, so the wrapper never scrolls and the
+   table never pushes the page sideways. */
 .learn-table-block {
     display: flex;
     flex-direction: column;
@@ -436,14 +438,12 @@
 .learn-table-wrap {
     border: 1px solid var(--steel-rule);
     border-radius: 2px;
-    overflow-x: auto;
 }
 
 .learn-table {
     border-collapse: collapse;
     font-family: var(--font-mono);
     font-size: var(--text-sm);
-    min-width: 54rem;
     width: 100%;
 }
 
@@ -508,12 +508,10 @@
     border-left: 1px solid color-mix(in srgb, var(--steel-rule) 60%, transparent);
 }
 
-.learn-table-hint {
-    color: var(--text-faint);
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    letter-spacing: 0.04em;
-    margin: 0;
+/* Rail name inside a cell: hidden while the column headers carry it,
+   shown once the table stacks and those headers are gone. */
+.learn-cell-label {
+    display: none;
 }
 
 /* Trust note: a quiet steel plate, no accent, because it describes
@@ -590,8 +588,7 @@
 }
 
 /* Breakpoints: widen the split and shorten the anchor offset once the
-   sticky top bar stops stacking, and hide the scroll hint once the
-   table fits without scrolling. */
+   sticky top bar stops stacking. */
 @media (min-width: 48rem) {
     .learn-thesis {
         font-size: var(--text-3xl);
@@ -615,8 +612,68 @@
     }
 }
 
-@media (min-width: 58rem) {
-    .learn-table-hint {
+/* Below 48rem the comparison table cannot hold four prose columns, so
+   it flattens into stacked blocks: the dimension names the block and
+   each rail value wears its own label. The explicit roles on the table
+   elements keep the screen reader structure that a display change would
+   otherwise drop, and no column is hidden, so nothing is lost. */
+@media (max-width: 48rem) {
+    .learn-table-wrap {
+        border: 0;
+        border-radius: 0;
+    }
+
+    .learn-table,
+    .learn-table thead,
+    .learn-table tbody,
+    .learn-table tr,
+    .learn-table th,
+    .learn-table td {
+        display: block;
+        width: auto;
+    }
+
+    .learn-table thead {
         display: none;
+    }
+
+    .learn-table tr {
+        border-top: 1px solid var(--steel-rule);
+        padding: var(--space-3) 0;
+    }
+
+    .learn-table tr:first-child {
+        border-top: 0;
+        padding-top: 0;
+    }
+
+    .learn-table tr:last-child {
+        padding-bottom: 0;
+    }
+
+    .learn-dim {
+        border-top: 0;
+        color: var(--advice-bone);
+        padding: 0 0 var(--space-2);
+        white-space: normal;
+    }
+
+    .learn-cell,
+    .learn-cell + .learn-cell {
+        border-left: 0;
+        border-top: 0;
+        padding: var(--space-1) 0;
+        width: auto;
+    }
+
+    .learn-cell-label {
+        color: var(--text-faint);
+        display: block;
+        font-family: var(--font-mono);
+        font-size: var(--text-xs);
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        margin-bottom: 2px;
+        text-transform: uppercase;
     }
 }

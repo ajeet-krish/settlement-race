@@ -27,8 +27,10 @@ function laneAbbrev(lane: string): string {
  * toggle that expands the full data payload as pretty JSON plus the
  * full hashes. The first broken link is marked on its row and named in
  * a visually hidden span, so the state survives both color blindness
- * and a screen reader. The wrap is a labelled focusable scroll region
- * so the wide table stays reachable on narrow screens.
+ * and a screen reader. Below 64rem the actor and hash columns fold
+ * into that detail row, and below 48rem the stamp and signature fold
+ * with them, so the row keeps its identity columns and nothing is
+ * dropped: every folded field is one tap away in the expanded record.
  */
 export default function ChainTable({ rows, brokenAt }: ChainTableProps) {
     const [openSeq, setOpenSeq] = useState<number | null>(null);
@@ -42,23 +44,28 @@ export default function ChainTable({ rows, brokenAt }: ChainTableProps) {
                 {rows.length} {rows.length === 1 ? "record" : "records"}, oldest
                 first. Open a row for the full payload and hashes.
             </p>
-            <div
-                className="prov-table-wrap"
-                role="region"
-                aria-labelledby="prov-chain-caption"
-                tabIndex={0}
-            >
+            <div className="prov-table-wrap">
                 <table className="prov-table">
                     <thead>
                         <tr>
                             <th scope="col">Seq</th>
-                            <th scope="col">Virtual ts</th>
+                            <th scope="col" className="prov-col-ts">
+                                Virtual ts
+                            </th>
                             <th scope="col">Lane</th>
                             <th scope="col">Event</th>
-                            <th scope="col">Actor</th>
-                            <th scope="col">Tx sig</th>
-                            <th scope="col">Prev hash</th>
-                            <th scope="col">Hash</th>
+                            <th scope="col" className="prov-col-actor">
+                                Actor
+                            </th>
+                            <th scope="col" className="prov-col-sig">
+                                Tx sig
+                            </th>
+                            <th scope="col" className="prov-col-prev">
+                                Prev hash
+                            </th>
+                            <th scope="col" className="prov-col-hash">
+                                Hash
+                            </th>
                             <th scope="col">
                                 <span className="prov-visually-hidden">
                                     Record detail
@@ -88,7 +95,7 @@ export default function ChainTable({ rows, brokenAt }: ChainTableProps) {
                                                 </span>
                                             ) : null}
                                         </td>
-                                        <td className="prov-ts">
+                                        <td className="prov-ts prov-col-ts">
                                             {formatVirtualTs(row.virtual_ts_ms)}{" "}
                                             s
                                         </td>
@@ -102,10 +109,10 @@ export default function ChainTable({ rows, brokenAt }: ChainTableProps) {
                                         <td className="prov-event">
                                             {row.event}
                                         </td>
-                                        <td className="prov-actor">
+                                        <td className="prov-actor prov-col-actor">
                                             {row.actor}
                                         </td>
-                                        <td className="prov-sig">
+                                        <td className="prov-sig prov-col-sig">
                                             {row.tx_sig !== null ? (
                                                 <span className="prov-hash-cell">
                                                     <span className="prov-mono">
@@ -122,10 +129,10 @@ export default function ChainTable({ rows, brokenAt }: ChainTableProps) {
                                                 </span>
                                             )}
                                         </td>
-                                        <td className="prov-mono">
+                                        <td className="prov-mono prov-col-prev">
                                             {shortHash(row.prev_hash)}
                                         </td>
-                                        <td className="prov-mono">
+                                        <td className="prov-mono prov-col-hash">
                                             {shortHash(row.hash)}
                                         </td>
                                         <td className="prov-toggle-cell">
@@ -168,6 +175,23 @@ export default function ChainTable({ rows, brokenAt }: ChainTableProps) {
                                                             Full record link
                                                         </p>
                                                         <dl className="prov-detail-list">
+                                                            <dt>
+                                                                Virtual stamp
+                                                            </dt>
+                                                            <dd>
+                                                                <span className="prov-mono-full">
+                                                                    {
+                                                                        row.virtual_ts_ms
+                                                                    }{" "}
+                                                                    ms
+                                                                </span>
+                                                            </dd>
+                                                            <dt>Actor</dt>
+                                                            <dd>
+                                                                <span className="prov-mono-full">
+                                                                    {row.actor}
+                                                                </span>
+                                                            </dd>
                                                             <dt>
                                                                 Previous hash
                                                             </dt>
@@ -238,9 +262,6 @@ export default function ChainTable({ rows, brokenAt }: ChainTableProps) {
                     </tbody>
                 </table>
             </div>
-            <p className="prov-scroll-hint">
-                Scroll sideways for the hash columns.
-            </p>
         </section>
     );
 }

@@ -2,34 +2,71 @@
  * Settlement Race design tokens.
  *
  * Direction: a settlement desk console, the dark housing of an RTGS style
- * terminal, carrying a printed advice slip in bone type. The accent pair
- * encodes the product itself: amber is the exposure window the sequential
- * path leaves open, teal is delivery versus payment where both legs move
- * together. Six named colors only; everything else is derived from them.
+ * terminal, carrying a printed advice slip in bone type. The palette is
+ * the official Dracula set, remapped onto the desk's own role names: the
+ * console housing is Dracula's background, the primary text its
+ * foreground, the rules its current line, and the accent pair encodes the
+ * product itself. Amber is the exposure window the sequential path leaves
+ * open, cyan is delivery versus payment where both legs move together.
+ * Every color below is an official Dracula value; the two text tones are
+ * the only mixes, and they exist to clear WCAG AA on this background.
  */
 
-:root {
-    /* Color roles.
-       settle-ground: deep petrol, the console housing. Page background,
-           never text.
-       advice-bone: the printed settlement advice. Primary text on ground.
-       exposure-amber: the gap window where principal risk sits open. The
-           sequential lane, the devnet badge, and the focus ring.
-       finality-teal: delivery versus payment, both legs or neither. The
-           atomic lane.
-       default-clay: a defaulted leg, the sequential path's losing
-           terminal. Reserved for loss states in later slices.
-       steel-rule: chrome, borders and dividers. Never text. */
-    --settle-ground: #0f1b1d;
-    --advice-bone: #ece7db;
-    --exposure-amber: #e9a13b;
-    --finality-teal: #58b3a0;
-    --default-clay: #d9604b;
-    --steel-rule: #35474a;
+/* Box sizing reset: padding and borders stay inside declared widths,
+   otherwise percentage widths with padding overflow their parent. */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
 
-    /* Derived text tones (no new hex values). */
-    --text-muted: color-mix(in srgb, var(--advice-bone) 72%, transparent);
-    --text-faint: color-mix(in srgb, var(--advice-bone) 54%, transparent);
+:root {
+    /* Color roles (Dracula values under the desk's semantic names).
+       settle-ground: #282a36, Dracula background. The console housing.
+           Page background, never text.
+       advice-bone: #f8f8f2, Dracula foreground. The printed settlement
+           advice. Primary text on ground (17:1).
+       exposure-amber: #ffb86c, Dracula orange. The gap window where
+           principal risk sits open: the sequential lane, the devnet
+           badge, and the run button.
+       finality-teal: #8be9fd, Dracula cyan. Delivery versus payment,
+           both legs or neither: the atomic lane.
+       default-clay: #ff5555, Dracula red. A defaulted leg, the
+           sequential path's losing terminal. Loss states only.
+       steel-rule: #44475a, Dracula current line. Chrome, borders and
+           dividers. Never text. */
+    --settle-ground: #282a36;
+    --advice-bone: #f8f8f2;
+    --exposure-amber: #ffb86c;
+    --finality-teal: #8be9fd;
+    --default-clay: #ff5555;
+    --steel-rule: #44475a;
+
+    /* Dracula accents for the roles the desk spells out in colour:
+       green verifies a chain, purple rings focus, pink is the quiet
+       hover accent on links, yellow warns while verification is still
+       pending. All four are official palette values. */
+    --accent-green: #50fa7b;
+    --accent-purple: #bd93f9;
+    --accent-pink: #ff79c6;
+    --accent-yellow: #f1fa8c;
+    --dracula-comment: #6272a4;
+
+    /* Derived text tones. Dracula's comment colour on the background
+       measures 3.0:1, which is fine for large display type but under
+       the 4.5:1 body text needs, so each tone mixes comment toward the
+       foreground until it clears AA on both the ground and the raised
+       card plates: muted lands near 6:1, faint near 4.6:1 at 12px. */
+    --text-muted: color-mix(
+        in srgb,
+        var(--dracula-comment) 55%,
+        var(--advice-bone)
+    );
+    --text-faint: color-mix(
+        in srgb,
+        var(--dracula-comment) 72%,
+        var(--advice-bone)
+    );
 
     /* Type: one superfamily, three roles. Condensed display for the
        ticker style brand and tabs, plain sans for educational copy,
@@ -59,8 +96,9 @@
     --space-6: 2rem;
     --space-7: 3rem;
 
-    /* Focus visible ring: amber so it reads as an alert on petrol. */
-    --focus-ring: 2px solid var(--exposure-amber);
+    /* Focus visible ring: Dracula purple, which reads as an accent on
+       the background (5.9:1) and keeps amber meaning exposure only. */
+    --focus-ring: 2px solid var(--accent-purple);
     --focus-ring-offset: 2px;
 
     /* Motion: short, mechanical, no bounce. */

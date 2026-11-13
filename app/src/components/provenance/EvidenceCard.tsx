@@ -170,26 +170,38 @@ export default function EvidenceCard({ mode, records }: EvidenceCardProps) {
 
             {rows !== null ? (
                 <div role="status">
-                    <div
-                        className="prov-table-wrap"
-                        role="region"
-                        aria-label="Devnet evidence rows"
-                        tabIndex={0}
-                    >
-                        <table className="prov-table prov-evidence-table">
-                            <thead>
-                                <tr>
-                                    <th scope="col">Signature</th>
-                                    <th scope="col">Found</th>
-                                    <th scope="col">Our program</th>
-                                    <th scope="col">Success</th>
-                                    <th scope="col">Detail</th>
+                    <div className="prov-table-wrap">
+                        <table
+                            className="prov-table prov-evidence-table"
+                            role="table"
+                            aria-label="Devnet evidence rows"
+                        >
+                            <thead role="rowgroup">
+                                <tr role="row">
+                                    <th scope="col" role="columnheader">
+                                        Signature
+                                    </th>
+                                    <th scope="col" role="columnheader">
+                                        Found
+                                    </th>
+                                    <th scope="col" role="columnheader">
+                                        Our program
+                                    </th>
+                                    <th scope="col" role="columnheader">
+                                        Success
+                                    </th>
+                                    <th scope="col" role="columnheader">
+                                        Detail
+                                    </th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody role="rowgroup">
                                 {rows.map((row) => (
-                                    <tr key={row.tx_sig}>
-                                        <td className="prov-sig">
+                                    <tr key={row.tx_sig} role="row">
+                                        <td
+                                            className="prov-sig"
+                                            role="cell"
+                                        >
                                             <span className="prov-hash-cell">
                                                 <span className="prov-mono">
                                                     {shortHash(row.tx_sig)}
@@ -202,22 +214,34 @@ export default function EvidenceCard({ mode, records }: EvidenceCardProps) {
                                         </td>
                                         <td
                                             className={`prov-flag prov-flag-${row.fetched_ok ? "yes" : "no"}`}
+                                            role="cell"
+                                            data-label="Found"
                                         >
                                             {flagCell(row.fetched_ok)}
                                         </td>
                                         <td
                                             className={`prov-flag prov-flag-${row.program_id_match ? "yes" : "no"}`}
+                                            role="cell"
+                                            data-label="Our program"
                                         >
                                             {flagCell(row.program_id_match)}
                                         </td>
                                         <td
                                             className={`prov-flag prov-flag-${row.success ? "yes" : "no"}`}
+                                            role="cell"
+                                            data-label="Success"
                                         >
                                             {flagCell(row.success)}
                                         </td>
-                                        <td className="prov-flag-detail">
+                                        <td
+                                            className="prov-flag-detail"
+                                            role="cell"
+                                            data-label="Detail"
+                                        >
                                             {row.reason !== undefined
-                                                ? evidenceReasonLabel(row.reason)
+                                                ? evidenceReasonLabel(
+                                                      row.reason,
+                                                  )
                                                 : ""}
                                         </td>
                                     </tr>

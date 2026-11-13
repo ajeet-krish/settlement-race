@@ -7,22 +7,58 @@
  * started; virtual stamps are bigint milliseconds on the engine's
  * deterministic clock, so displayed time never becomes a float.
  *
- * Playback model: the stream is walked in one wall time segment per event
- * interval (SEGMENT_WALL_MS per interval at 1x), and the displayed clock
- * interpolates between the two event stamps that bracket the current wall
- * position. Speed multiplies wall time, so 2x crosses every interval twice
- * as fast and 0.5x half as fast. Wall time passed in is always expressed
- * at the speed passed in: when the speed changes mid playback the caller
- * runs the accumulated value through rescaleWallMs, which preserves the
- * segment position exactly, so the displayed clock holds steady instead of
- * rewinding or jumping over time already shown.
+ * Playback model: each interval between two events takes wall time
+ * proportional to its virtual span (clamped to a readable band), so the
+ * readout sweeps through the stream like a stopwatch and the exposure
+ * window counts up at human speed. Speed multiplies playback rate, so 2x
+ * crosses every interval twice as fast and 0.5x half as fast. Wall time
+ * passed in is always expressed at the speed passed in: when the speed
+ * changes mid playback the caller runs the accumulated value through
+ * rescaleWallMs, which preserves the segment position exactly, so the
+ * displayed clock holds steady instead of rewinding or jumping over time
+ * already shown.
  */
 
 import type { RaceEvent } from "../../engine/scenarioEngine";
 import { parse_cents } from "../../lib/money";
 
-/** Wall milliseconds one event interval takes at 1x playback. */
-export const SEGMENT_WALL_MS = 500;
+/** Wall milliseconds one virtual millisecond takes at 1x playback. */
+export const WALL_MS_PER_VIRTUAL_MS = 1;
+
+/** Smallest wall time any segment takes, so tight event bursts stay readable. */
+export const MIN_SEGMENT_WALL_MS = 100;
+
+/** Largest wall time a single segment takes, so extreme gaps stay watchable. */
+export const MAX_SEGMENT_WALL_MS = 8_000;
+
+/**
+ * Wall time a segment takes at 1x, proportional to its virtual span. This
+ * is the heart of readable pacing: a 6 second exposure window really
+ * takes about 6 seconds to watch at 1x, instead of every event interval
+ * collapsing into the same fixed slice. Tiny segments clamp up so they
+ * stay visible; giant ones clamp down so a run never drags.
+ */
+function segmentWallMs(deltaVirtualMs: bigint): number {
+    const raw = Number(deltaVirtualMs) * WALL_MS_PER_VIRTUAL_MS;
+    if (!Number.isFinite(raw)) {
+        return MAX_SEGMENT_WALL_MS;
+    }
+    return Math.min(
+        MAX_SEGMENT_WALL_MS,
+        Math.max(MIN_SEGMENT_WALL_MS, raw),
+    );
+}
+
+/** Total wall time at 1x for the whole stream, all segments summed. */
+export function streamWallMs(events: readonly RaceEvent[]): number {
+    let total = 0;
+    for (let i = 0; i < events.length - 1; i++) {
+        total += segmentWallMs(
+            events[i + 1]!.virtual_ts_ms - events[i]!.virtual_ts_ms,
+        );
+    }
+    return total;
+}
 
 /** Lifecycle of the sequential lane's exposure window. */
 export type RiskWindowStatus = "open" | "closed" | "never";
@@ -67,10 +103,12 @@ export interface PlayheadState {
  * Displayed virtual clock for a stream of events after wallElapsedMs of
  * playback at the given speed.
  *
- * Interpolates linearly between the virtual stamps of consecutive events,
- * one event interval per SEGMENT_WALL_MS of scaled wall time. Monotonic in
- * wall time, clamps to the last event's stamp once the stream is crossed,
- * and returns 0n for zero or one event (an interval needs two endpoints).
+ * Each segment between consecutive events takes wall time proportional to
+ * its virtual span (see segmentWallMs), so the readout sweeps through the
+ * stream like a stopwatch: the exposure window between leg 1 and leg 2
+ * counts up at human speed rather than flashing. Monotonic in wall time,
+ * clamps to the last event's stamp once the stream is crossed, and
+ * returns 0n for zero or one event (an interval needs two endpoints).
  *
  * wallElapsedMs must be expressed at speed (see rescaleWallMs): feeding
  * the same wall value at two different speeds shows two different points,
@@ -84,21 +122,28 @@ export function displayVirtualMs(
     if (events.length <= 1) {
         return 0n;
     }
-    const lastIndex = events.length - 1;
-    const position = segmentPosition(wallElapsedMs, speed);
-    if (position >= lastIndex) {
-        return events[lastIndex]!.virtual_ts_ms;
+    const scale = speed > 0 ? speed : 0;
+    if (scale === 0) {
+        return events[0]!.virtual_ts_ms;
     }
-    const index = Math.floor(position);
-    const fraction = position - index;
-    const from = events[index]!.virtual_ts_ms;
-    const to = events[index + 1]!.virtual_ts_ms;
-    const span = to - from;
-    if (span <= 0n) {
-        return from;
+    const wall = wallElapsedMs > 0 ? wallElapsedMs : 0;
+    let walked = 0;
+    for (let i = 0; i < events.length - 1; i++) {
+        const segWall =
+            segmentWallMs(
+                events[i + 1]!.virtual_ts_ms - events[i]!.virtual_ts_ms,
+            ) / scale;
+        if (wall < walked + segWall) {
+            const from = events[i]!.virtual_ts_ms;
+            const to = events[i + 1]!.virtual_ts_ms;
+            const fraction = segWall <= 0 ? 0 : (wall - walked) / segWall;
+            return BigInt(
+                Math.round(Number(from) + fraction * Number(to - from)),
+            );
+        }
+        walked += segWall;
     }
-    const interpolated = Number(from) + fraction * Number(span);
-    return BigInt(Math.round(interpolated));
+    return events[events.length - 1]!.virtual_ts_ms;
 }
 
 /**
@@ -115,19 +160,23 @@ export function snappedDisplayVirtualMs(
     if (events.length <= 1) {
         return 0n;
     }
-    const lastIndex = events.length - 1;
-    const position = segmentPosition(wallElapsedMs, speed);
-    if (position >= lastIndex) {
-        return events[lastIndex]!.virtual_ts_ms;
-    }
-    return events[Math.floor(position)]!.virtual_ts_ms;
-}
-
-/** Fractional segment position of a wall time at a playback speed. */
-function segmentPosition(wallElapsedMs: number, speed: number): number {
-    const wall = wallElapsedMs > 0 ? wallElapsedMs : 0;
     const scale = speed > 0 ? speed : 0;
-    return (wall * scale) / SEGMENT_WALL_MS;
+    if (scale === 0) {
+        return events[0]!.virtual_ts_ms;
+    }
+    const wall = wallElapsedMs > 0 ? wallElapsedMs : 0;
+    let walked = 0;
+    for (let i = 0; i < events.length - 1; i++) {
+        const segWall =
+            segmentWallMs(
+                events[i + 1]!.virtual_ts_ms - events[i]!.virtual_ts_ms,
+            ) / scale;
+        if (wall < walked + segWall) {
+            return events[i]!.virtual_ts_ms;
+        }
+        walked += segWall;
+    }
+    return events[events.length - 1]!.virtual_ts_ms;
 }
 
 /**

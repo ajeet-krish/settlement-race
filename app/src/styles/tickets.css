@@ -513,13 +513,12 @@
     max-width: 54rem;
 }
 
-/* Field table: mono for field and type, body for the meaning, wrapped
-   in a labelled focusable region so narrow screens scroll it with the
-   keyboard. */
+/* Field table: mono for field and type, body for the meaning. The
+   columns give way to each other rather than scrolling, so the table
+   reads inline on a phone. */
 .tkt-table-wrap {
     border: 1px solid var(--steel-rule);
     border-radius: 2px;
-    overflow-x: auto;
 }
 
 .tkt-table {

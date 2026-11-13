@@ -10,10 +10,10 @@ import RaceTrack from "./race/RaceTrack";
 import ScenarioPicker from "./race/ScenarioPicker";
 import TimelineControl from "./race/TimelineControl";
 import {
-    SEGMENT_WALL_MS,
     displayVirtualMs,
     rescaleWallMs,
     snappedDisplayVirtualMs,
+    streamWallMs,
 } from "./race/raceTiming";
 import type { ChainStatus, RaceSource, RaceSpeed } from "./race/raceTypes";
 import "../styles/race.css";
@@ -132,9 +132,7 @@ export default function RacePanel({
 
     // Wall time the current stream needs to cross at this speed.
     const streamEndMs =
-        events.length > 1
-            ? ((events.length - 1) * SEGMENT_WALL_MS) / speed
-            : 0;
+        events.length > 1 ? streamWallMs(events) / speed : 0;
 
     useEffect(() => {
         if (!playing) {
