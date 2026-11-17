@@ -613,3 +613,23 @@ npx tsc --noEmit            # repo root, covers scripts/
 ### Closing status
 
 All 6 phases are code-complete pending final commit.
+
+## 2026-11-17 - Roster reconciliation (README rewrite verification and offline auto-fallback)
+
+Scope: independent re-execution of both suites to back the README product demo rewrite, plus a reconciling entry for the Phase 6 roster. Two things moved the count since the Phase 6 entry: commit 065e80b (dracula palette and race timing) replaced one raceTiming test ("interpolates linearly between consecutive stamps") with two new ones ("counts up proportionally through each segment" and "gives a wide exposure window watchable wall time instead of a flash"), a net gain of one that took 338 to 339; and the offline auto-fallback feature then added app/src/__tests__/appAutoFallback.test.tsx with 9 tests, taking the roster to 348 in 27 files.
+
+### Suite results (all executed this date)
+
+| Suite | Command | Result |
+|-------|---------|--------|
+| Vitest (app) | `cd app && npm test` | PASS: 27 files, 348 tests (339 before the fallback landed, 348 after) |
+| Type check (app) | `cd app && npx tsc --noEmit` | PASS (strict mode, exit 0) |
+| Build (app) | `cd app && npm run build` | PASS; prints the demo-accounts exclusion warning; `dist` holds no `demo-accounts.json` and no JSON file contains `secretKey` |
+| Rust (pinned) | `cargo test-sbf --manifest-path programs/settlement-race/Cargo.toml --tools-version v1.54 --arch v0` | PASS: 32 tests (27 LiteSVM integration in settlement_race.rs, 5 state schema in state_schema.rs) |
+
+### Reconciled roster
+
+- Vitest: 348 tests in 27 files. Composition: the Phase 6 roster of 338, plus 1 from commit 065e80b, plus 9 from the auto-fallback feature.
+- Rust: 32 tests (unchanged since Phase 2).
+- Repository total: 380 tests, all passing.
+- README.md cites 348 Vitest plus 32 Rust; docs/reviews.md carries the 2026-11-17 README accuracy review (verdict PASS).
