@@ -9,7 +9,7 @@ describe("tab model", () => {
             race: "Race",
             tickets: "Tickets",
             provenance: "Provenance",
-            learn: "Learn",
+            learn: "Theory",
         });
     });
 });

@@ -55,7 +55,7 @@ export const SCENARIOS: readonly ScenarioSpec[] = [
         kind: "honest",
         label: "Honest both sides",
         description:
-            "Both parties acknowledge, fund, and pay on time. The sequential path settles only after the gap window closes; the atomic path settles in one transaction.",
+            "Both sides pay on time; sequential settles after the gap, atomic in one transaction.",
         gap_ms: DEFAULT_GAP_MS,
         leg1_usd_cents: LEG1_USD_CENTS,
         leg2_cad_cents: LEG2_CAD_CENTS,
@@ -68,7 +68,7 @@ export const SCENARIOS: readonly ScenarioSpec[] = [
         kind: "default_after_leg1",
         label: "Default after leg 1",
         description:
-            "Party B takes the USD leg and never sends the CAD leg. On the sequential path the loss locks in when the gap expires; on the atomic path leg 1 never moves without leg 2.",
+            "Party B takes the USD leg and never pays CAD; sequential defaults, atomic settles.",
         gap_ms: DEFAULT_GAP_MS,
         leg1_usd_cents: LEG1_USD_CENTS,
         leg2_cad_cents: LEG2_CAD_CENTS,
@@ -81,7 +81,7 @@ export const SCENARIOS: readonly ScenarioSpec[] = [
         kind: "late_payment",
         label: "Late payment",
         description:
-            "Party B pays the CAD leg only at the end of the gap window. The sequential path settles late with the exposure window fully open; the atomic path has no window at all.",
+            "Party B pays only at gap expiry; sequential settles late, atomic has no window.",
         gap_ms: DEFAULT_GAP_MS,
         leg1_usd_cents: LEG1_USD_CENTS,
         leg2_cad_cents: LEG2_CAD_CENTS,
@@ -94,7 +94,7 @@ export const SCENARIOS: readonly ScenarioSpec[] = [
         kind: "atomic_revert",
         label: "Atomic revert",
         description:
-            "The scenario spec funds leg 2 at 90 percent in both lanes, so the lanes start equal. The sequential path releases leg 1, then pays only the available 90 percent of leg 2 as a partial payment, and the gap expiry declares a default so A bears the loss. The atomic instruction reverts with InsufficientEscrow and nothing moves, so the atomic lane protects A with zero exposure.",
+            "Leg two is funded at 90 percent; sequential partially pays then defaults, atomic reverts.",
         gap_ms: DEFAULT_GAP_MS,
         leg1_usd_cents: LEG1_USD_CENTS,
         leg2_cad_cents: LEG2_CAD_CENTS,
@@ -107,7 +107,7 @@ export const SCENARIOS: readonly ScenarioSpec[] = [
         kind: "partial_payment",
         label: "Partial payment",
         description:
-            "Party B releases 60 percent of the owed CAD leg on the sequential path and then stops, so partial money moves before the gap expiry declares the default. The matching atomic attempt is underfunded at 60 percent and reverts, because partial payment is impossible by construction.",
+            "Party B pays 60 percent of CAD then stops; sequential defaults, atomic reverts.",
         gap_ms: DEFAULT_GAP_MS,
         leg1_usd_cents: LEG1_USD_CENTS,
         leg2_cad_cents: LEG2_CAD_CENTS,

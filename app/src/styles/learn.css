@@ -1,5 +1,5 @@
 /*
- * Learn view: long form education on the settlement desk identity.
+ * Theory view: long form education on the settlement desk identity.
  * Single class selectors rooted at .learn, .cls, or .learn- so later
  * slices can layer styles without specificity fights, matching shell
  * css and race css. Every colour is a theme token or a color mix of
@@ -73,36 +73,65 @@
     flex: 1;
 }
 
-/* In page navigation: mono chips, one per section, 44px targets. */
-.learn-nav-list {
+/* Two column document layout: a quiet table of contents on the left,
+   the narrative column on the right. Below 64rem the sidebar
+   collapses into a horizontal strip above the content, which is the
+   old chip nav's job under a new name. */
+.learn-layout {
+    display: grid;
+    gap: var(--space-6);
+    grid-template-columns: minmax(0, 1fr);
+}
+
+/* The main column carries the section rhythm the old .learn flex
+   column used to give every section directly. */
+.learn-main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    min-width: 0;
+}
+
+/* Document nav: mono, small, quiet. The strip form gets a hairline
+   underneath; the sidebar form gets a hairline to its right. */
+.learn-toc {
+    border-bottom: 1px solid var(--steel-rule);
+    min-width: 0;
+    padding-bottom: var(--space-3);
+}
+
+.learn-toc-title {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    margin: 0 0 var(--space-2);
+    text-transform: uppercase;
+}
+
+.learn-toc-list {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-2);
+    gap: var(--space-1) var(--space-4);
     list-style: none;
     margin: 0;
     padding: 0;
 }
 
-.learn-nav-link {
+.learn-toc-link {
     align-items: center;
-    border: 1px solid var(--steel-rule);
-    border-radius: 2px;
     color: var(--text-muted);
     display: inline-flex;
     font-family: var(--font-mono);
     font-size: var(--text-xs);
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
     min-height: 44px;
-    padding: 0 var(--space-3);
     text-decoration: none;
-    text-transform: uppercase;
-    transition:
-        border-color var(--motion-fast) var(--ease-out),
-        color var(--motion-fast) var(--ease-out);
+    transition: color var(--motion-fast) var(--ease-out);
 }
 
-.learn-nav-link:hover {
-    border-color: var(--advice-bone);
+.learn-toc-link:hover {
     color: var(--advice-bone);
 }
 
@@ -609,6 +638,35 @@
 @media (min-width: 56rem) {
     .learn-split {
         grid-template-columns: 1fr 1fr;
+    }
+}
+
+/* The sidebar form: the TOC becomes a bordered document nav beside
+   the narrative, and its inner block sticks below the sticky top bar
+   while the sections scroll past. The 9rem offset mirrors the section
+   scroll-margin-top so a jumped heading and the TOC settle on the
+   same line under the chrome. The border-right stretches with the
+   column, while only the inner block sticks. */
+@media (min-width: 64rem) {
+    .learn-layout {
+        grid-template-columns: 13rem minmax(0, 1fr);
+    }
+
+    .learn-toc {
+        border-bottom: 0;
+        border-right: 1px solid var(--steel-rule);
+        padding-bottom: 0;
+        padding-right: var(--space-4);
+    }
+
+    .learn-toc-inner {
+        position: sticky;
+        top: 9rem;
+    }
+
+    .learn-toc-list {
+        flex-direction: column;
+        gap: 0;
     }
 }
 

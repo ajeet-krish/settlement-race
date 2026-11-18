@@ -125,17 +125,18 @@ function renderSectionBody(id: string): ReactNode {
 }
 
 /**
- * Educational layer: an opening thesis, an in-page anchor nav, then
- * the narrative sections (risk window, CLS, the honesty box, atomic
- * settlement, the rail comparison, the trust note, and sources).
- * Pure presentational copy from learnContent, no engine or account
- * state, so the whole view is static and testable as data.
+ * Theory panel: an opening thesis, a left "On this page" table of
+ * contents, then the narrative sections (risk window, CLS, the honesty
+ * box, atomic settlement, the rail comparison, the trust note, and
+ * sources) in the main column beside it. Pure presentational copy from
+ * learnContent, no engine or account state, so the whole view is static
+ * and testable as data.
  */
 export default function LearnPanel() {
     return (
         <div className="learn">
             <header className="learn-head">
-                <p className="learn-eyebrow">Educational layer</p>
+                <p className="learn-eyebrow">Settlement theory</p>
                 <h2 className="learn-thesis">{HOOK}</h2>
                 <p className="learn-framing">{FRAMING}</p>
                 <div className="learn-keyline" aria-hidden="true">
@@ -144,53 +145,68 @@ export default function LearnPanel() {
                 </div>
             </header>
 
-            <nav className="learn-nav" aria-label="Sections in this view">
-                <ul className="learn-nav-list">
-                    {LEARN_SECTIONS.map((section) => (
-                        <li key={section.id}>
-                            <a
-                                className="learn-nav-link"
-                                href={`#${section.id}`}
-                            >
-                                {section.label}
-                            </a>
-                        </li>
-                    ))}
-                </ul>
-            </nav>
+            <div className="learn-layout">
+                <nav
+                    className="learn-toc"
+                    aria-labelledby="learn-toc-title"
+                >
+                    <div className="learn-toc-inner">
+                        <p
+                            className="learn-toc-title"
+                            id="learn-toc-title"
+                        >
+                            On this page
+                        </p>
+                        <ul className="learn-toc-list">
+                            {LEARN_SECTIONS.map((section) => (
+                                <li key={section.id}>
+                                    <a
+                                        className="learn-toc-link"
+                                        href={`#${section.id}`}
+                                    >
+                                        {section.label}
+                                    </a>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                </nav>
 
-            {LEARN_SECTIONS.map((section) => {
-                const boxed = section.id === "honest-limits";
-                return (
-                    <section
-                        key={section.id}
-                        id={section.id}
-                        className="learn-section"
-                        aria-labelledby={
-                            boxed
-                                ? "honest-limits-title"
-                                : `${section.id}-title`
-                        }
-                    >
-                        {boxed ? null : (
-                            <>
-                                <p
-                                    className={`learn-sec-eyebrow learn-sec-eyebrow-${section.tone}`}
-                                >
-                                    {section.eyebrow}
-                                </p>
-                                <h3
-                                    className="learn-sec-title"
-                                    id={`${section.id}-title`}
-                                >
-                                    {section.title}
-                                </h3>
-                            </>
-                        )}
-                        {renderSectionBody(section.id)}
-                    </section>
-                );
-            })}
+                <div className="learn-main">
+                    {LEARN_SECTIONS.map((section) => {
+                        const boxed = section.id === "honest-limits";
+                        return (
+                            <section
+                                key={section.id}
+                                id={section.id}
+                                className="learn-section"
+                                aria-labelledby={
+                                    boxed
+                                        ? "honest-limits-title"
+                                        : `${section.id}-title`
+                                }
+                            >
+                                {boxed ? null : (
+                                    <>
+                                        <p
+                                            className={`learn-sec-eyebrow learn-sec-eyebrow-${section.tone}`}
+                                        >
+                                            {section.eyebrow}
+                                        </p>
+                                        <h3
+                                            className="learn-sec-title"
+                                            id={`${section.id}-title`}
+                                        >
+                                            {section.title}
+                                        </h3>
+                                    </>
+                                )}
+                                {renderSectionBody(section.id)}
+                            </section>
+                        );
+                    })}
+                </div>
+            </div>
         </div>
     );
 }

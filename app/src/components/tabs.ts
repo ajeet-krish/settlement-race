@@ -19,7 +19,7 @@ export const TAB_LABELS: Readonly<Record<TabId, string>> = {
     race: "Race",
     tickets: "Tickets",
     provenance: "Provenance",
-    learn: "Learn",
+    learn: "Theory",
 };
 
 /**
