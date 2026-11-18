@@ -1,6 +1,6 @@
 # Settlement Race Architecture
 
-Last updated: 2026-11-11 (Phase 3)
+Last updated: 2026-11-17 (Theory view restructure)
 
 ## Overview
 Tokenized USD/CAD exchange on Solana devnet racing a sequential pay-first settlement path (controllable gap, counterparty default risk) against an atomic delivery-versus-payment path (both legs or neither), from one identical trade ticket, with integer-cent money, a deterministic virtual clock, and hash-chained provenance anchored on-chain.
@@ -88,12 +88,12 @@ Phase 2 implementation notes: `settle_atomic` checks the live vault token balanc
 | app/src/engine/bot.ts | Scripted counterparty behaviors | new (phase 4) |
 | app/src/engine/scenarios.ts | Five scenario specs | new (phase 1 data, phase 4 logic) |
 | app/src/components/ | WalletBar, TicketCard, RaceTrack, LaneView, BalancePanel, TimelineControl, EventLog, ScenarioPicker, PaymentsComparison, VerifyTool | new (phases 4 to 6) |
-| app/src/components/learn/learnContent.ts | Learn view copy as pure data: hook, sections, figures, citations | new (phase 5) |
-| app/src/components/learn/LearnPanel.tsx | Learn view composition: thesis, anchor nav, narrative sections | new (phase 5) |
+| app/src/components/learn/learnContent.ts | Theory view copy as pure data: hook, sections, figures, citations | new (phase 5) |
+| app/src/components/learn/LearnPanel.tsx | Theory view composition: thesis, "On this page" TOC sidebar, narrative sections | new (phase 5) |
 | app/src/components/learn/ClsLimitsBox.tsx | Honesty box: what CLS provides that this toy does not | new (phase 5) |
 | app/src/components/learn/ComparisonTable.tsx | Three rails by six dimensions comparison table | new (phase 5) |
 | app/src/components/learn/Citations.tsx | Inline [n] citation rendering and numbered sources list | new (phase 5) |
-| app/src/styles/learn.css | Learn view styles including the amber risk hatch | new (phase 5) |
+| app/src/styles/learn.css | Theory view styles including the amber risk hatch | new (phase 5) |
 | app/src/fixtures/ | Committed offline demo fixtures | new (phase 6) |
 | scripts/setup-devnet.ts | USD/CAD mints (2 decimals), airdrops, ATAs | new (phase 1) |
 | scripts/make-fixtures.ts | Fixture generator | new (phase 6) |

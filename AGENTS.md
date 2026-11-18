@@ -40,7 +40,7 @@ cd app && npm run lint  # Lint frontend (when configured)
 | 2 | Anchor program and tests | Complete |
 | 3 | Provenance module | Complete |
 | 4 | Race UI | Complete |
-| 5 | Educational layer | Complete |
+| 5 | Theory view (educational layer) | Complete |
 | 6 | Offline mode and polish | Complete |
 
 ## Deep Docs

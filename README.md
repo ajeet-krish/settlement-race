@@ -26,9 +26,9 @@ Tickets tab after a run: the single ticket both lanes raced on, rebuilt from the
 
 Provenance tab after a run: Verify recomputes every hash link and prints the verdict, the chain table lists each record in chain order, the tamper demo fires on a copy while the original stays VALID, and the transaction evidence card reads the run's signatures from devnet. The mode badge names the ledger behind it.
 
-![Learn view anchored to the "What CLS does that this does not" honesty box, showing the listed missing protections and the surrounding risk window narrative](docs/screenshots/learn-view.png)
+![Theory view anchored to the "What CLS does that this does not" honesty box, showing the listed missing protections and the surrounding risk window narrative](docs/screenshots/learn-view.png)
 
-Learn tab anchored to the "What CLS does that this does not" honesty box (`#honest-limits`), showing the box plus surrounding section context.
+Theory tab anchored to the "What CLS does that this does not" honesty box (`#honest-limits`), showing the box plus surrounding section context.
 
 ## Primary Features
 
@@ -36,7 +36,7 @@ Learn tab anchored to the "What CLS does that this does not" honesty box (`#hone
 2. **Five scenarios**: honest baseline, default after leg 1, late payment, atomic revert, and partial payment, each with expected terminal states pinned in code.
 3. **Trade ticket view**: the agreed ticket rebuilt from provenance events, with a lifecycle rail and a schema reference.
 4. **Provenance chain**: verify every hash link, fire a tamper demo on a copy, and read devnet transaction evidence per signature.
-5. **Learn view**: the Herstatt to CLS to atomic DvP narrative with citations keyed to [docs/research.md](docs/research.md).
+5. **Theory view**: the Herstatt to CLS to atomic DvP narrative with citations keyed to [docs/research.md](docs/research.md).
 6. **Live and offline modes**: one switch between real devnet transactions and an in-memory mock on the same engine.
 
 ## Quick start
@@ -101,11 +101,11 @@ Both lanes run from the same ticket, the same funding, and the same virtual cloc
 
 All five trade USD 10,000.00 against CAD 13,500.00 at rate 1.350000 with a 5000 ms virtual gap, defined in `app/src/engine/scenarios.ts`:
 
-- **Honest both sides**: both parties acknowledge, fund, and pay on time. Sequential settles after the gap closes (SETTLED), atomic settles in one transaction (SETTLED).
-- **Default after leg 1**: party B takes the USD leg and never sends CAD. Sequential declares default at gap expiry (DEFAULTED) while A is short the paid-out USD; the atomic lane settles untouched (SETTLED).
-- **Late payment**: party B pays the CAD leg only at the end of the gap window. Sequential settles late with the exposure window fully open and the record stamped LATE (SETTLED); atomic has no window at all (SETTLED).
+- **Honest both sides**: both sides pay on time. Sequential settles after the gap closes (SETTLED), atomic settles in one transaction (SETTLED).
+- **Default after leg 1**: party B takes the USD leg and never pays CAD. Sequential declares default at gap expiry (DEFAULTED) while A is short the paid-out USD; the atomic lane settles untouched (SETTLED).
+- **Late payment**: party B pays only at gap expiry. Sequential settles late with the exposure window fully open and the record stamped LATE (SETTLED); atomic has no window at all (SETTLED).
 - **Atomic revert**: leg 2 is funded at 90 percent in both lanes (`fund_bps` 9000), so the lanes start equal. Sequential releases leg 1, pays only the available 90 percent of leg 2 as a partial payment, and the gap expiry declares a default so A bears the loss (DEFAULTED); the atomic instruction reverts with `InsufficientEscrow` and nothing moves (FAILED).
-- **Partial payment**: party B releases 60 percent of the owed CAD leg and then stops (`fund_bps` 6000), so partial money moves before the gap expiry declares the default (DEFAULTED); the matching atomic attempt is underfunded at 60 percent and reverts (FAILED), because partial payment is impossible by construction.
+- **Partial payment**: party B pays 60 percent of the owed CAD leg and then stops (`fund_bps` 6000), so partial money moves before the gap expiry declares the default (DEFAULTED); the matching atomic attempt is underfunded at 60 percent and reverts (FAILED), because partial payment is impossible by construction.
 
 ### Tickets
 
@@ -115,9 +115,9 @@ Everything on the tab derives from the run, and the component holds no run state
 
 The tab derives its rows from the same event stream the race view consumed, so the chain and the race can never disagree. The verify card recomputes every hash link over the current records and prints a verdict slab (NOT VERIFIED before the first press, then VALID or BROKEN with the broken sequence number), plus the anchor comparison the run already performed from `chain_ok`, claiming only what that flag supports. The chain table lists every record in chain order: seq, virtual time, lane, event, actor, transaction signature, `prev_hash`, and hash, with per row details. The tamper card edits one field in a deep copy of the chain and verifies the copy: verification stops at the edited record, the result reads BROKEN at that sequence number, and the original chain is untouched and still VALID. The devnet evidence card reads up to 10 distinct signatures from devnet RPC, one call each, and reports found, our program id, and success per row, with an evidence check that passes only when every fetched signature exists on chain; offline mode never fetches and says plainly that the mock ledger's signatures no cluster has seen. A mode badge (Devnet live or Offline demo) names the ledger behind every verdict.
 
-### Learn
+### Theory
 
-The Learn tab carries the education layer, all as pure data in `app/src/components/learn/learnContent.ts`. The risk window section tells the Herstatt story (Bankhaus Herstatt, 26 June 1974) and ties it to the amber hatch in the race view, with the pull quote that the gap between the two legs is the exposure. The CLS section explains payment versus payment and multilateral netting, with sourced figures (daily payment value, funding saved by netting, T+2, the 2013 USD/CAD same day session) each carrying its confidence wording. The honesty box at `#honest-limits` lists every protection this toy lacks: no multilateral netting, no intraday credit, no central bank money, no legal finality, a scripted counterparty, toy scale, and play money on devnet. The atomic settlement section gives both sides of the on-chain DvP argument, the comparison table puts wire, CLS, and stablecoin atomic DvP across six dimensions, and the trust note spells out what a VALID verdict actually trusts. Inline citations use `[n]` tokens keyed to section 10 of [docs/research.md](docs/research.md), which holds all 43 sources.
+The Theory tab carries the education layer, all as pure data in `app/src/components/learn/learnContent.ts`. A left "On this page" table of contents lists the seven sections, sticky at wide widths and a horizontal strip below 64rem. The risk window section tells the Herstatt story (Bankhaus Herstatt, 26 June 1974) and ties it to the amber hatch in the race view, with the pull quote that the gap between the two legs is the exposure. The CLS section explains payment versus payment and multilateral netting, with sourced figures (daily payment value, funding saved by netting, T+2, the 2013 USD/CAD same day session) each carrying its confidence wording. The honesty box at `#honest-limits` lists every protection this toy lacks: no multilateral netting, no intraday credit, no central bank money, no legal finality, a scripted counterparty, toy scale, and play money on devnet. The atomic settlement section gives both sides of the on-chain DvP argument, the comparison table puts wire, CLS, and stablecoin atomic DvP across six dimensions, and the trust note spells out what a VALID verdict actually trusts. Inline citations use `[n]` tokens keyed to section 10 of [docs/research.md](docs/research.md), which holds all 43 sources.
 
 ### Live versus offline mode
 
@@ -133,17 +133,17 @@ The Learn tab carries the education layer, all as pure data in `app/src/componen
 2. **One deterministic virtual clock.** Race time is integer virtual milliseconds owned by `VirtualClock` and mirrored on chain by `advance_clock` (monotonic, and terminal states reject it). Devnet block time and transaction signatures are evidence only: each provenance record carries `virtual_ts_ms` plus `real_ts_iso` and `tx_sig`, so timelines stay reproducible while every claim still points at a real devnet transaction.
 3. **Hash-chained provenance.** Every record is sha256 over canonical JSON (keys sorted, no whitespace, the `hash` field removed), linked by `prev_hash` from a 64-zero genesis. One devnet transaction anchors the finished head in the `ChainHead` PDA. Verification recomputes every link, then compares head and event count against that account, which turns a self-consistent log into tamper evidence and also detects truncation.
 4. **Identical-ticket fairness.** Both lanes start from the same ticket, the same funding, and the same clock: the engine snapshots start balances as a fairness assert, and `fund_bps` applies identically to both lanes. The settlement mechanism is the only difference between them.
-5. **Honest limits.** Devnet play money, a scripted counterparty bot instead of a real default, no claim of legal settlement finality, and an in-app Learn honesty box that lists every protection this toy does not have before any rail comparison.
+5. **Honest limits.** Devnet play money, a scripted counterparty bot instead of a real default, no claim of legal settlement finality, and an in-app Theory honesty box that lists every protection this toy does not have before any rail comparison.
 
 ## Demo script
 
 | Scenario | What to watch |
 |----------|---------------|
-| Honest both sides | The baseline race: sequential settles after the gap, atomic settles instantly, both lanes end SETTLED |
+| Honest both sides | The baseline race: sequential settles after the gap, atomic settles in one transaction, both lanes end SETTLED |
 | Default after leg 1 | The moment A's USD leaves escrow and never comes back, while the atomic lane settles untouched |
-| Late payment | Exposure duration quantified: party B pays after the gap expiry, the record is stamped LATE, and the race between default and payment plays out |
+| Late payment | Exposure duration quantified: party B pays only at gap expiry, the record is stamped LATE, and the race between default and payment plays out |
 | Atomic revert | All-or-nothing protects: at 90 percent funding sequential releases leg 1 then partially pays and defaults, while the atomic instruction reverts and no state changes |
-| Partial payment | 60 percent still loses on sequential (DEFAULTED with partial received); on the atomic lane a partial payment is impossible by construction |
+| Partial payment | 60 percent of CAD still loses on sequential (DEFAULTED with partial received); on the atomic lane a partial payment is impossible by construction |
 
 ## Tests
 
@@ -190,7 +190,7 @@ Further reading:
 
 - [docs/decisions.md](docs/decisions.md): decision records, including the Anchor 1.2.2 pin, the demo account keys, and the driver-only signer matrix
 - [docs/tradeops-schema.md](docs/tradeops-schema.md): trade ticket fields, lifecycle transitions, canonical JSON, and provenance record schemas
-- [docs/research.md](docs/research.md): sourced research behind the Learn view, with the honest limits of this toy and 43 citations
+- [docs/research.md](docs/research.md): sourced research behind the Theory view, with the honest limits of this toy and 43 citations
 - [docs/tests.md](docs/tests.md): suite results, live devnet smoke evidence, and the npm audit note
 - [docs/reviews.md](docs/reviews.md): code and security review history and routed gap closures
 
